@@ -1,0 +1,35 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Claude
+.claude/
+
+# Build outputs
+build/
+dist/
+target/
+*.class
+*.jar
+*.war
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
