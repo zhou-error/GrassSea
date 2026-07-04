@@ -1,0 +1,34 @@
+{
+  "name": "grasssea-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.22.0",
+    "antd": "^5.15.0",
+    "@ant-design/icons": "^5.3.0",
+    "zustand": "^4.5.0",
+    "@tanstack/react-query": "^5.24.0",
+    "axios": "^1.6.7",
+    "react-markdown": "^9.0.1",
+    "react-syntax-highlighter": "^15.5.0",
+    "remark-gfm": "^4.0.0",
+    "dayjs": "^1.11.10"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-syntax-highlighter": "^15.5.11",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.4.0",
+    "vite": "^5.1.0"
+  }
+}

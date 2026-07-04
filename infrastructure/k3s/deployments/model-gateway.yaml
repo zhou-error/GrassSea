@@ -1,0 +1,65 @@
+# ============================================================
+# GrassSea AI — 模型网关 Deployment
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-gateway
+  namespace: grasssea
+  labels:
+    app: model-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-gateway
+  template:
+    metadata:
+      labels:
+        app: model-gateway
+    spec:
+      containers:
+        - name: model-gateway
+          image: harbor.grasssea.local/grasssea/model-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8004
+              name: http
+          envFrom:
+            - configMapRef:
+                name: grasssea-config
+            - secretRef:
+                name: grasssea-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-gateway
+  namespace: grasssea
+spec:
+  selector:
+    app: model-gateway
+  ports:
+    - port: 8004
+      targetPort: 8004
+      name: http
+  type: ClusterIP
