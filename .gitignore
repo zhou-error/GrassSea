@@ -29,7 +29,29 @@ target/
 # Logs
 *.log
 
+# Node / Frontend
+node_modules/
+frontend/dist/
+.npm/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
 # Environment
 .env
 .env.local
 .env.*.local
+
+# Project
+startup.log
+backups/
