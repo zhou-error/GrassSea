@@ -1,0 +1,10 @@
+# ============================================================
+# GrassSea AI — K3s Namespace
+# ============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: grasssea
+  labels:
+    app.kubernetes.io/name: grasssea
+    app.kubernetes.io/part-of: grasssea-platform

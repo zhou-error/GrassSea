@@ -1,0 +1,98 @@
+/* ============================================================
+   GrassSea AI — Quiet Luxury Design System
+   静奢极简 · 船舶工程专业界面
+   ============================================================ */
+
+/* ---- Font ---- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ---- CSS Variables ---- */
+:root {
+  --bg-base:          #F4F6F7;
+  --bg-white:         #FFFFFF;
+  --accent-sage:      #C1D5C0;
+  --accent-glacier:   #B5D6E0;
+  --text-primary:     #222222;
+  --text-secondary:   #666666;
+  --text-muted:       #999999;
+  --status-green:     #7DBB8A;
+  --bubble-left:      #E8F3F0;
+  --bubble-right:     #E4EEF0;
+  --glass-bg:         rgba(255, 255, 255, 0.72);
+  --glass-border:     rgba(255, 255, 255, 0.45);
+  --shadow-soft:      0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card:      0 2px 12px rgba(0, 0, 0, 0.05);
+  --radius-sm:        8px;
+  --radius-md:        14px;
+  --radius-lg:        22px;
+  --radius-xl:        28px;
+  --font-family:      'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:        'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --transition:       all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Reset ---- */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-family);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ---- SVG Wave Pattern ---- */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg width='1200' height='800' viewBox='0 0 1200 800' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 400 Q150 350 300 400 Q450 450 600 400 Q750 350 900 400 Q1050 450 1200 400 L1200 800 L0 800Z' fill='none' stroke='%23889999' stroke-width='0.5'/%3E%3Cpath d='M0 420 Q150 370 300 420 Q450 470 600 420 Q750 370 900 420 Q1050 470 1200 420 L1200 800 L0 800Z' fill='none' stroke='%23889999' stroke-width='0.35'/%3E%3Cpath d='M0 440 Q150 390 300 440 Q450 490 600 440 Q750 390 900 440 Q1050 490 1200 440 L1200 800 L0 800Z' fill='none' stroke='%23889999' stroke-width='0.2'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: bottom;
+}
+
+/* ---- Frosted Glass Mixin ---- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border: 1px solid var(--glass-border);
+}
+
+/* ---- Typography ---- */
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-primary); }
+h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+h3 { font-size: 17px; font-weight: 500; color: var(--text-primary); }
+h4 { font-size: 15px; font-weight: 500; color: var(--text-primary); }
+h5 { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.mono { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+
+/* ---- Animations ---- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes floatUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

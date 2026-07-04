@@ -1,0 +1,38 @@
+# GrassSea AI — Casbin RBAC 策略定义
+# 格式: p, role, resource, action
+
+# Admin 全部权限
+p, admin, *, *
+p, admin, project, *
+p, admin, knowledge, *
+p, admin, tool, *
+p, admin, report, *
+p, admin, user, *
+
+# Project Lead
+p, project_lead, project, read
+p, project_lead, project, write
+p, project_lead, knowledge, read
+p, project_lead, knowledge, write
+p, project_lead, member, manage
+p, project_lead, task, assign
+
+# Engineer
+p, engineer, project, read
+p, engineer, project, write
+p, engineer, knowledge, read
+p, engineer, tool, use
+p, engineer, report, generate
+
+# Guest
+p, guest, project, read
+p, guest, knowledge, read
+
+# API User
+p, api_user, api, access
+
+# 用户-角色分配
+g, admin_user_1, admin
+g, project_lead_user_1, project_lead
+g, engineer_user_1, engineer
+g, guest_user_1, guest
