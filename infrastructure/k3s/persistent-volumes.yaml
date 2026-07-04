@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: grasssea
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 50Gi }
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: grasssea
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 30Gi }
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: grasssea
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 100Gi }
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: milvus-pvc
+  namespace: grasssea
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 50Gi }
+  storageClassName: local-path

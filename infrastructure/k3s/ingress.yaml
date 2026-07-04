@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grasssea-ingress
+  namespace: grasssea
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/websocket-services: "agent-service"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["grasssea.local"]
+      secretName: grasssea-tls
+  rules:
+    - host: grasssea.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-service
+                port:
+                  number: 8002
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: model-gateway
+                port:
+                  number: 8004
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
