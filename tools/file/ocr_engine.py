@@ -15,9 +15,8 @@ class OcrEngineTool(BaseTool):
     def __init__(self): super().__init__(OCR_ENGINE_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
+        """如实返回未实现 — 不返回任何识别结果"""
         return {
-            "status": "completed", "image": params.get("image_path", ""),
-            "language": params.get("language", "chi_sim+eng"),
-            "text_boxes": [{"text": "型线图", "bbox": [100, 50, 200, 80], "confidence": 0.98}],
-            "overall_confidence": 0.95,
+            "status": "not_implemented",
+            "message": "图纸 OCR 尚未实现：未接入 PaddleOCR/Tesseract 引擎，无法返回文本框与置信度。",
         }

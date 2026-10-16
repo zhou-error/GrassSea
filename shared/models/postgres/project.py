@@ -15,6 +15,7 @@ from shared.models.database import Base
 from shared.models.postgres.base import TimestampMixin, UUIDMixin
 
 import enum
+import uuid
 
 
 class ProjectStatus(str, enum.Enum):

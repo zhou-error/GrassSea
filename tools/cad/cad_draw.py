@@ -15,10 +15,8 @@ class CadDrawTool(BaseTool):
     def __init__(self): super().__init__(CAD_DRAW_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        drawing_type = params.get("drawing_type", "lines_plan")
+        """如实返回未实现 — 不生成任何图纸文件"""
         return {
-            "status": "completed", "drawing_type": drawing_type,
-            "file_path": f"output/{drawing_type}.dwg", "format": "DWG",
-            "preview": f"output/{drawing_type}.png",
-            "curves": {"stations": 21, "waterlines": 8, "buttocks": 5},
+            "status": "not_implemented",
+            "message": "CAD 图纸生成尚未实现：未接入 AutoCAD/SolidWorks MCP，无法输出 DWG 型线图与预览图，因此不返回任何文件路径。",
         }

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -112,6 +113,69 @@ async def version():
         "service": "model-gateway",
         "version": settings.APP_VERSION,
         "supported_models": list(model_router.model_map.keys()) if model_router else [],
+    }
+
+
+@app.get("/admin/models")
+async def list_models():
+    """查看当前已注册的模型及其状态"""
+    if not model_router:
+        return {"models": [], "message": "Model router not initialized"}
+    models = []
+    for name, config in model_router.model_map.items():
+        models.append({
+            "name": name,
+            "provider": config["provider"],
+            "has_key": bool(config.get("api_key")),
+            "base_url": config.get("base_url", ""),
+        })
+    return {
+        "models": models,
+        "count": len(models),
+    }
+
+
+@app.post("/admin/reload")
+async def reload_config(config: dict[str, str]):
+    """运行时重载模型配置，无需重启容器。
+
+    接受部分更新：{"DEEPSEEK_API_KEY": "sk-xxx", "CLAUDE_API_KEY": "sk-xxx", ...}
+
+    会重新初始化模型路由器，使新 API Key 立即生效。
+    """
+    global model_router
+
+    updated_keys = []
+    for key, value in config.items():
+        if hasattr(settings, key):
+            old_value = getattr(settings, key, "")
+            setattr(settings, key, value)
+            os.environ[key] = value
+            if old_value != value:
+                updated_keys.append(key)
+            logger.info("Config reloaded", key=key, changed=(old_value != value))
+
+    if not updated_keys:
+        return {
+            "status": "ok",
+            "models": list(model_router.model_map.keys()) if model_router else [],
+            "message": "No changes detected",
+        }
+
+    # 重新初始化模型路由器
+    if model_router:
+        await model_router.close()
+
+    model_router = ModelRouter(settings)
+    await model_router.initialize()
+
+    new_models = list(model_router.model_map.keys())
+    logger.info("Model router reloaded", models=new_models)
+
+    return {
+        "status": "ok",
+        "models": new_models,
+        "message": f"配置已更新，模型已重载: {new_models}",
     }
 
 

@@ -6,12 +6,24 @@
 
 from __future__ import annotations
 
+import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env.example 中的占位值，绝不能当作真实密钥使用
+_PLACEHOLDER_RE = re.compile(r"^(your[-_]|change[-_]?me|placeholder|xxx+|sk-xxx|test[-_]?key)", re.I)
+
+
+def is_usable_key(value: str | None) -> bool:
+    """判断配置项是否为真实可用的密钥（占位符一律视为未配置）"""
+    if not value:
+        return False
+    return not _PLACEHOLDER_RE.match(value.strip())
 
 
 class Settings(BaseSettings):
@@ -135,12 +147,6 @@ class Settings(BaseSettings):
     def CELERY_RESULT_BACKEND(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/1"
 
-    # --- JWT ---
-    JWT_SECRET_KEY: str = "change-me-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
     # --- LLM API Keys (通过环境变量注入) ---
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
@@ -150,13 +156,26 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # --- Embedding ---
+    # 向量后端: auto(推荐) | local | openai | hash
+    EMBEDDING_PROVIDER: str = "auto"
+    # openai 后端使用的模型与维度
     EMBEDDING_MODEL: str = "text-embedding-3-large"
     EMBEDDING_DIM: int = 3072
-    LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-large-zh-v1.5"
+    # local 后端使用的本地模型（bge-small-zh-v1.5 约 95MB / 512 维，推荐个人使用）
+    LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"
+    # 本地模型缓存目录（留空则用 <项目根>/docker-data/fastembed）
+    LOCAL_EMBEDDING_CACHE: str = ""
+    # HuggingFace 站点（国内建议镜像；留空则使用官方 huggingface.co）
+    HF_ENDPOINT: str = "https://hf-mirror.com"
 
     # --- Search ---
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
+
+    # --- 内部服务 URL（Docker 中自动覆盖为容器名）---
+    MODEL_GATEWAY_URL: str = "http://localhost:8004"
+    AGENT_SERVICE_URL: str = "http://localhost:8002"
+    KNOWLEDGE_SERVICE_URL: str = "http://localhost:8003"
 
     # --- 项目路径 ---
     @property
@@ -166,5 +185,22 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """获取全局配置单例"""
+    """获取全局配置单例
+
+    会先把 Fernet 加密存储中的敏感 Key 注入进程环境。
+    此前只有 chat-service 加载密钥，其余服务独立启动时拿不到
+    LLM Key，只能退化为离线回答（Docker 里靠启动时的跨服务推送兜底）。
+    环境变量优先级高于 .env，因此这里能覆盖 .env 中的占位符。
+    """
+    try:
+        from shared.utils.secrets import load_secrets
+
+        for key, value in load_secrets().items():
+            # 必须覆盖环境中的占位符（compose 会把 .env 的占位值传进来）
+            if is_usable_key(value) and not is_usable_key(os.environ.get(key, "")):
+                os.environ[key] = value
+    except Exception:  # noqa: BLE001
+        # 密钥不可用时保持静默，配置仍可正常加载
+        pass
+
     return Settings()

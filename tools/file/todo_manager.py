@@ -15,10 +15,8 @@ class TodoManagerTool(BaseTool):
     def __init__(self): super().__init__(TODO_MANAGER_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        action = params.get("action", "create")
+        """如实返回未实现 — 不创建或更新任何待办"""
         return {
-            "status": "completed", "action": action,
-            "todo_id": f"todo_{hash(params.get('title', '')) % 100000}",
-            "title": params.get("title", ""), "priority": params.get("priority", "medium"),
-            "message": "待办事项已创建" if action == "create" else "待办事项已更新",
+            "status": "not_implemented",
+            "message": "待办管理尚未实现：未接入 PostgreSQL 待办表，无法持久化待办事项。",
         }

@@ -15,8 +15,8 @@ class PdfParserTool(BaseTool):
     def __init__(self): super().__init__(PDF_PARSER_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
+        """如实返回未实现 — 不返回任何正文或页数"""
         return {
-            "status": "completed", "file": params.get("file_path", ""), "pages": 20,
-            "text_preview": "规范条文内容摘要...", "tables_extracted": 3,
-            "sections": ["第1章 总则", "第2章 船体结构", "第3章 稳性"],
+            "status": "not_implemented",
+            "message": "PDF 解析尚未实现：正文/表格提取流程未接通，无法返回页数、条文正文或表格内容。",
         }

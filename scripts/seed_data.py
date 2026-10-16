@@ -1,133 +1,95 @@
-"""数据库种子脚本
+"""数据库种子脚本（幂等，可重复执行）
 
-初始化默认数据：管理员角色、系统配置项等。
+写入:
+  - system_configs : 7 项系统默认配置
+  - users          : 一个默认本地用户
+                     （projects / task_records / todo_items / offset_tables
+                       的 user_id 为 NOT NULL，没有用户行就无法建业务数据）
+
+用法:
+    uv run python scripts/seed_data.py
 """
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from shared.utils.logging import get_logger, setup_logging
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
-logger = get_logger(__name__)
+from shared.models.database import pg_engine, pg_session_factory  # noqa: E402
+from shared.models.postgres.system_config import SystemConfig  # noqa: E402
+from shared.models.postgres.user import User  # noqa: E402
+from shared.utils.logging import setup_logging  # noqa: E402
 
-# 默认角色定义
-DEFAULT_ROLES = [
-    {
-        "name": "admin",
-        "display_name": "系统管理员",
-        "description": "全部权限：用户管理、系统配置、所有项目读写",
-        "permissions": ["*"],
-    },
-    {
-        "name": "project_lead",
-        "display_name": "项目负责人",
-        "description": "项目内全部权限：成员管理、知识库管理、任务分配、报告管理",
-        "permissions": [
-            "project:read", "project:write",
-            "knowledge:read", "knowledge:write",
-            "member:manage",
-            "task:assign",
-        ],
-    },
-    {
-        "name": "engineer",
-        "display_name": "工程师",
-        "description": "项目内读写权限：知识库查阅、工具调用、报告生成",
-        "permissions": [
-            "project:read", "project:write",
-            "knowledge:read",
-            "tool:use",
-            "report:generate",
-        ],
-    },
-    {
-        "name": "guest",
-        "display_name": "访客",
-        "description": "指定项目只读：查阅报告、查看图纸",
-        "permissions": [
-            "project:read",
-            "knowledge:read",
-        ],
-    },
-    {
-        "name": "api_user",
-        "display_name": "API 用户",
-        "description": "按申请范围授权：密钥认证，可限制调用频次和工具范围",
-        "permissions": [
-            "api:access",
-        ],
-    },
-]
-
-# 系统配置项
 SYSTEM_CONFIGS = [
-    {
-        "key": "default_llm_model",
-        "value": "deepseek-chat",
-        "description": "默认 LLM 模型",
-    },
-    {
-        "key": "default_embedding_model",
-        "value": "text-embedding-3-large",
-        "description": "默认 Embedding 模型",
-    },
-    {
-        "key": "max_context_turns",
-        "value": "20",
-        "description": "最大对话上下文轮数",
-    },
-    {
-        "key": "session_timeout_minutes",
-        "value": "30",
-        "description": "会话超时时间（分钟）",
-    },
-    {
-        "key": "rag_chunk_size",
-        "value": "512",
-        "description": "RAG 文档分块大小（tokens）",
-    },
-    {
-        "key": "rag_chunk_overlap",
-        "value": "64",
-        "description": "RAG 分块重叠大小（tokens）",
-    },
-    {
-        "key": "rag_top_k",
-        "value": "5",
-        "description": "RAG 检索返回 Top-K 数量",
-    },
+    {"key": "default_llm_model", "value": "deepseek-chat", "description": "默认 LLM 模型"},
+    {"key": "default_embedding_model", "value": "text-embedding-3-large", "description": "默认 Embedding 模型"},
+    {"key": "max_context_turns", "value": "20", "description": "最大对话上下文轮数"},
+    {"key": "session_timeout_minutes", "value": "30", "description": "会话超时时间（分钟）"},
+    {"key": "rag_chunk_size", "value": "512", "description": "RAG 文档分块大小（tokens）"},
+    {"key": "rag_chunk_overlap", "value": "64", "description": "RAG 分块重叠大小（tokens）"},
+    {"key": "rag_top_k", "value": "5", "description": "RAG 检索返回 Top-K 数量"},
 ]
 
+DEFAULT_USER = {
+    "username": "admin",
+    "display_name": "本地用户",
+    "role": "admin",
+    "is_active": True,
+}
 
-async def seed_roles() -> None:
-    """初始化默认角色"""
-    # 在生产环境中，这里通过 Repository 写入 PostgreSQL
-    logger.info("Seeding default roles", count=len(DEFAULT_ROLES))
-    for role in DEFAULT_ROLES:
-        logger.debug("Role", name=role["name"], permissions=len(role["permissions"]))
+
+async def seed_system_configs(session: AsyncSession) -> tuple[int, int]:
+    created = updated = 0
+    for cfg in SYSTEM_CONFIGS:
+        row = (
+            await session.execute(select(SystemConfig).where(SystemConfig.key == cfg["key"]))
+        ).scalar_one_or_none()
+        if row is None:
+            session.add(
+                SystemConfig(key=cfg["key"], value=cfg["value"], description=cfg["description"])
+            )
+            created += 1
+            continue
+        changed = False
+        if row.value != cfg["value"]:
+            row.value = cfg["value"]
+            changed = True
+        if cfg["description"] and row.description != cfg["description"]:
+            row.description = cfg["description"]
+            changed = True
+        if changed:
+            updated += 1
+    return created, updated
 
 
-async def seed_system_configs() -> None:
-    """初始化系统配置项"""
-    logger.info("Seeding system configs", count=len(SYSTEM_CONFIGS))
-    for config in SYSTEM_CONFIGS:
-        logger.debug("Config", key=config["key"], value=config["value"])
+async def seed_default_user(session: AsyncSession) -> tuple[User, bool]:
+    user = (
+        await session.execute(select(User).where(User.username == DEFAULT_USER["username"]))
+    ).scalar_one_or_none()
+    if user is not None:
+        return user, False
+    user = User(**DEFAULT_USER)
+    session.add(user)
+    await session.flush()
+    return user, True
 
 
 async def main() -> None:
-    setup_logging(level="INFO")
-    logger.info("Starting database seed...")
-
-    await seed_roles()
-    await seed_system_configs()
-
-    logger.info("Database seed complete!")
+    setup_logging(level="WARNING")
+    async with pg_session_factory() as session:
+        created, updated = await seed_system_configs(session)
+        user, user_created = await seed_default_user(session)
+        await session.commit()
+        print(f"RESULT system_configs: 新增 {created} 项, 更新 {updated} 项")
+        print(f"RESULT users: {'新增' if user_created else '已存在'} {user.username} id={user.id}")
+    await pg_engine.dispose()
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())

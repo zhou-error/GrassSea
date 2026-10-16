@@ -33,7 +33,10 @@ target/
 node_modules/
 frontend/dist/
 .npm/
+.uv-cache/
 *.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # Python
 __pycache__/
@@ -55,3 +58,10 @@ htmlcov/
 # Project
 startup.log
 backups/
+
+# Encrypted secrets (NEVER commit)
+.grasssea_key
+.grasssea_secrets
+
+# Docker volumes
+docker-data/

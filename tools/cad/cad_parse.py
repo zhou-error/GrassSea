@@ -15,4 +15,8 @@ class CadParseTool(BaseTool):
     def __init__(self): super().__init__(CAD_PARSE_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        return {"status": "completed", "file": params.get("file_path", ""), "dimensions": [], "layers": ["0", "hull", "deck", "dimensions", "text"], "annotations": [], "blocks": []}
+        """如实返回未实现 — 不返回任何图纸解析结论"""
+        return {
+            "status": "not_implemented",
+            "message": "CAD 图纸解析尚未实现：未接入 DXF/DWG 解析器，无法从图纸中提取真实尺寸、标注与图层。",
+        }

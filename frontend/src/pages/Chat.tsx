@@ -3,9 +3,11 @@ import { Typography, Input } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { chatApi } from '../api';
+import { chatApi, getTaskStatusApi } from '../api';
+import type { TaskStatusResponse } from '../api';
 import { useChatStore } from '../stores/chatStore';
 import DAGPanel from '../components/DAGPanel';
+import { bulletText, stepOutputLines, summaryLines } from '../components/stepOutput';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -37,9 +39,98 @@ const CapsuleTag: React.FC<{ label: string }> = ({ label }) => (
 const ChatPage: React.FC = () => {
   const { messages, sessionId, streaming, addMessage, appendContent, setSessionId, setStreaming } = useChatStore();
   const [input, setInput] = useState('');
+  // 当前对话绑定的任务 ID，用于右侧 DAG 拓扑面板
+  const [taskId, setTaskId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const pollGenRef = useRef(0);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // 组件卸载时停止任务轮询
+  useEffect(
+    () => () => {
+      pollGenRef.current += 1;
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    },
+    []
+  );
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      pollTimerRef.current = window.setTimeout(() => {
+        pollTimerRef.current = null;
+        resolve();
+      }, ms);
+    });
+
+  const countOf = (value: string[] | undefined) => (Array.isArray(value) ? value.length : 0);
+
+  /** 轮询任务状态并把进度追加到对应的助手消息中，最多约 60 秒 */
+  const pollTask = async (taskId: string, assistantId: string, gen: number) => {
+    const startedAt = Date.now();
+    const MAX_POLL_MS = 60000;
+    let lastProgress = -1;
+
+    while (pollGenRef.current === gen && Date.now() - startedAt < MAX_POLL_MS) {
+      await sleep(2000);
+      if (pollGenRef.current !== gen) return;
+
+      let data: TaskStatusResponse;
+      try {
+        data = (await getTaskStatusApi(taskId)).data;
+      } catch {
+        if (pollGenRef.current !== gen) return;
+        appendContent(assistantId, '\n\n> ⚠️ 任务状态查询失败，请到任务中心查看进度');
+        return;
+      }
+      if (pollGenRef.current !== gen) return;
+
+      const status = (data.status || '').toLowerCase();
+      const progress =
+        typeof data.progress === 'number' && Number.isFinite(data.progress) ? Math.round(data.progress) : 0;
+      const finished = status === 'completed' || status === 'failed' || status === 'cancelled';
+
+      if (!finished && progress !== lastProgress) {
+        appendContent(assistantId, `\n> 任务执行中… ${progress}%`);
+        lastProgress = progress;
+      }
+
+      if (finished) {
+        const label = status === 'completed' ? '已完成' : status === 'failed' ? '失败' : '已取消';
+        const result = data.result;
+        appendContent(
+          assistantId,
+          result
+            ? `\n> 任务${label}：完成 ${countOf(result.completed)} 步 · 失败 ${countOf(result.failed)} 步 · 跳过 ${countOf(result.skipped)} 步`
+            : `\n> 任务${label}`
+        );
+        if (result) {
+          // 优先用后端预格式化的 summary，缺失时自行把 steps 产出转成可读行
+          const summary = summaryLines(result.summary);
+          const lines =
+            summary.length > 0
+              ? summary
+              : Object.entries(result.results ?? {}).flatMap(([stepId, payload]) => {
+                  const detail = stepOutputLines(payload);
+                  return detail.length > 0 ? [`${stepId}｜${detail.join('，')}`] : [];
+                });
+          if (lines.length > 0) appendContent(assistantId, bulletText(lines));
+        }
+        if (status === 'failed') {
+          appendContent(assistantId, `\n> ❌ 失败原因：${data.error || '后端未返回错误信息'}`);
+        }
+        return;
+      }
+    }
+
+    if (pollGenRef.current === gen) {
+      appendContent(assistantId, '\n> ⏱️ 任务仍在执行，请到任务中心查看最新进度');
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || streaming) return;
@@ -60,7 +151,15 @@ const ChatPage: React.FC = () => {
         appendContent(assistantId, char);
         await new Promise((r) => setTimeout(r, 12));
       }
-      if (task_id) appendContent(assistantId, `\n\n> 任务ID: \`${task_id}\``);
+      if (task_id) {
+        appendContent(assistantId, `\n\n> 任务ID: \`${task_id}\``);
+        // 右侧拓扑面板跟随本次任务
+        setTaskId(task_id);
+        // 取消上一个任务的轮询，改为跟踪本次任务
+        pollGenRef.current += 1;
+        const gen = pollGenRef.current;
+        void pollTask(task_id, assistantId, gen);
+      }
     } catch {
       appendContent(assistantId, '抱歉，服务暂时不可用。');
     } finally {
@@ -221,7 +320,7 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* 右侧 DAG 拓扑面板 */}
-      <DAGPanel />
+      <DAGPanel taskId={taskId} />
     </>
   );
 };

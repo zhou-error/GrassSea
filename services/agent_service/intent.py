@@ -79,6 +79,13 @@ RULE_PATTERNS: dict[IntentType, list[tuple[str, float, list[str]]]] = {
 }
 
 
+# 疑问句标志：这类问法应优先走知识检索
+QUESTION_HINT_RE = r"(什么是|什么叫|何为|怎么|怎样|如何|为什么|为何|是否|区别|对比|含义|定义|解释|规定|要求|原理|？|\?)"
+
+# 明确的执行动作：出现这些词说明用户是要"跑一个任务"，而不是问知识
+ACTION_HINT_RE = r"(计算一下|计算下|帮我计算|做一次|帮我做|生成一份|生成一个|制作|绘制|导出|执行|模拟|仿真|分析一下|校核一下|跑一下)"
+
+
 class IntentClassifier:
     """意图分类器（规则引擎 + LLM）"""
 
@@ -122,6 +129,17 @@ class IntentClassifier:
                         best_confidence = confidence
                         best_intent = intent_type
                         best_rules = rules
+
+        # 疑问句优先走知识检索：除非明确要求执行计算/生成，
+        # 否则"完整稳性怎么校核？"这类问题应该去查知识库，而不是直接建任务。
+        if (
+            best_intent in (IntentType.PROFESSIONAL_TASK, IntentType.TOOL_CALL)
+            and re.search(QUESTION_HINT_RE, text)
+            and not re.search(ACTION_HINT_RE, text)
+        ):
+            best_intent = IntentType.KNOWLEDGE_QUERY
+            best_confidence = max(best_confidence, 0.86)
+            best_rules = [*best_rules, "question_prefers_knowledge"]
 
         if best_intent:
             entities = self._extract_entities(text)

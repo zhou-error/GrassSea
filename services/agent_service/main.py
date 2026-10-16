@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -22,6 +23,8 @@ from services.agent_service.registry import AgentRegistry
 from services.agent_service.executor import TaskExecutor
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging, set_trace_id
+from tools.base.registry import ToolRegistry
+from tools.bootstrap import build_tool_registry
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -29,25 +32,32 @@ settings = get_settings()
 intent_classifier: IntentClassifier | None = None
 task_planner: TaskPlanner | None = None
 agent_registry: AgentRegistry | None = None
+tool_registry: ToolRegistry | None = None
 task_executor: TaskExecutor | None = None
 active_connections: dict[str, WebSocket] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global intent_classifier, task_planner, agent_registry, task_executor
+    global intent_classifier, task_planner, agent_registry, tool_registry, task_executor
     setup_logging(level="DEBUG" if settings.APP_DEBUG else "INFO")
     logger.info("Agent Service starting...")
 
     intent_classifier = IntentClassifier(settings)
     task_planner = TaskPlanner(settings)
     agent_registry = AgentRegistry()
-    task_executor = TaskExecutor(settings, agent_registry)
+    tool_registry = await build_tool_registry()
+    task_executor = TaskExecutor(settings, agent_registry, tool_registry)
 
     await agent_registry.initialize()
     await intent_classifier.initialize()
 
-    logger.info("Agent Service started", port=settings.AGENT_SERVICE_PORT)
+    registered_tools = await tool_registry.list_tools()
+    logger.info(
+        "Agent Service started",
+        port=settings.AGENT_SERVICE_PORT,
+        registered_tools=len(registered_tools),
+    )
     yield
     logger.info("Agent Service shutting down...")
 
@@ -86,11 +96,96 @@ class TaskStatusResponse(BaseModel):
 @app.get("/health")
 async def health():
     agents = await agent_registry.list_agents() if agent_registry else []
+    tools = await tool_registry.list_tools() if tool_registry else []
     return {
         "status": "healthy", "service": "agent-service",
         "version": settings.APP_VERSION,
         "registered_agents": len(agents),
+        "registered_tools": len(tools),
     }
+
+
+@app.get("/tasks")
+async def list_tasks():
+    """列出内存中的任务（最新在前）"""
+    tasks = await task_executor.list_tasks() if task_executor else []
+    return {"total": len(tasks), "tasks": tasks}
+
+
+@app.get("/agents")
+async def list_agents():
+    """列出已注册智能体"""
+    agents = await agent_registry.list_agents() if agent_registry else []
+    return {"total": len(agents), "agents": agents}
+
+
+@app.get("/admin/status")
+async def admin_status():
+    """查看当前配置状态"""
+    return {
+        "service": "agent-service",
+        "deepseek_configured": bool(settings.DEEPSEEK_API_KEY),
+        "claude_configured": bool(settings.CLAUDE_API_KEY),
+        "openai_configured": bool(settings.OPENAI_API_KEY),
+        "model_gateway_url": getattr(settings, "MODEL_GATEWAY_URL", ""),
+    }
+
+
+@app.post("/admin/reload")
+async def reload_config(config: dict[str, str]):
+    """运行时重载配置，无需重启容器。
+
+    接受部分更新：{"DEEPSEEK_API_KEY": "sk-xxx", ...}
+    会重新初始化意图分类器和任务规划器。
+    """
+    global intent_classifier, task_planner
+
+    updated = False
+    for key, value in config.items():
+        if hasattr(settings, key):
+            old_value = getattr(settings, key, "")
+            setattr(settings, key, value)
+            os.environ[key] = value
+            if old_value != value:
+                updated = True
+            logger.info("Agent config reloaded", key=key, changed=(old_value != value))
+
+    if updated:
+        intent_classifier = IntentClassifier(settings)
+        await intent_classifier.initialize()
+        task_planner = TaskPlanner(settings)
+        logger.info("Agent intent classifier & planner re-initialized")
+
+    return {
+        "status": "ok",
+        "deepseek_configured": bool(settings.DEEPSEEK_API_KEY),
+        "claude_configured": bool(settings.CLAUDE_API_KEY),
+        "message": "配置已更新" if updated else "无变化",
+    }
+
+
+# 意图 -> 中文名称
+_INTENT_LABELS = {
+    "chitchat": "闲聊",
+    "knowledge_query": "知识查询",
+    "tool_call": "工具调用",
+    "professional_task": "专业任务",
+    "sub_agent_orchestration": "多智能体协同",
+}
+
+
+def _describe_plan(task: dict) -> str:
+    """把执行计划渲染成可读的多行文本"""
+    steps = task.get("steps") or []
+    if not steps:
+        return "（无可执行步骤）"
+    lines = []
+    for idx, step in enumerate(steps, 1):
+        desc = step.get("description") or step.get("action") or ""
+        deps = step.get("dependencies") or []
+        suffix = ("（依赖 " + "、".join(deps) + "）") if deps else ""
+        lines.append(f"  {idx}. {desc}{suffix}")
+    return "\n".join(lines)
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -118,9 +213,18 @@ async def chat(request: ChatRequest):
         task = await task_planner.plan(request.message, intent_result)
         # 异步执行
         await task_executor.execute_async(task, session_id, request.user_id)
+        intent_label = _INTENT_LABELS.get(
+            intent_result.intent_type.value, intent_result.intent_type.value
+        )
         return ChatResponse(
-            session_id=session_id, intent=intent_result.intent_type,
-            answer=f"任务已创建 (ID: {task['task_id']})，正在执行中...\n\n{task.get('summary', '')}",
+            session_id=session_id,
+            intent=intent_result.intent_type,
+            answer=(
+                f"已创建{intent_label} {task['task_id']}\n"
+                f"执行计划共 {len(task.get('steps', []))} 步：\n"
+                f"{_describe_plan(task)}\n\n"
+                "正在执行，进度会实时刷新；完成后会给出各步结果。"
+            ),
             task_id=task["task_id"],
         )
 
@@ -128,8 +232,14 @@ async def chat(request: ChatRequest):
         task = await task_planner.plan_multi_agent(request.message, intent_result)
         await task_executor.execute_async(task, session_id, request.user_id)
         return ChatResponse(
-            session_id=session_id, intent="sub_agent_orchestration",
-            answer=f"多智能体协同任务已创建 (ID: {task['task_id']})\n{task.get('summary', '')}",
+            session_id=session_id,
+            intent="sub_agent_orchestration",
+            answer=(
+                f"已创建多智能体协同任务 {task['task_id']}\n"
+                f"执行计划共 {len(task.get('steps', []))} 步：\n"
+                f"{_describe_plan(task)}\n\n"
+                "正在执行，进度会实时刷新；完成后会给出各步结果。"
+            ),
             task_id=task["task_id"],
         )
 
@@ -191,7 +301,7 @@ async def _handle_knowledge_query(message: str, session_id: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"http://localhost:{settings.KNOWLEDGE_SERVICE_PORT}/rag/query",
+                f"{settings.KNOWLEDGE_SERVICE_URL}/rag/query",
                 json={"query": message, "top_k": 5},
             )
             if resp.status_code == 200:

@@ -4,7 +4,7 @@
 # ============================================================
 SHELL := /bin/bash
 
-.PHONY: help up down up-full ps logs build test lint lint-fix clean migrate setup init-buckets
+.PHONY: help up down ps logs build test lint lint-fix clean migrate setup init-buckets db-init db-migrate db-migrate-new db-seed
 
 help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -17,17 +17,11 @@ up: ## 启动核心中间件 (postgres mongodb redis milvus minio rabbitmq)
 	@sleep 5
 	docker-compose ps
 
-up-full: ## 启动全部服务 (含 neo4j, jaeger, prometheus, grafana)
-	docker-compose --profile full up -d
-	@echo "等待全部服务就绪..."
-	@sleep 10
-	docker-compose ps
-
 down: ## 停止并移除所有容器
-	docker-compose --profile full --profile kg --profile observability down
+	docker-compose down
 
 down-volumes: ## 停止并移除所有容器 + 数据卷 (危险)
-	docker-compose --profile full --profile kg --profile observability down -v
+	docker-compose down -v
 
 ps: ## 查看所有服务状态
 	docker-compose ps
@@ -48,11 +42,14 @@ init-buckets: ## 初始化 MinIO bucket
 	@echo "初始化 MinIO buckets..."
 	@python scripts/init_minio.py
 
+db-init: ## 一键建表（个人开发环境，等价于 create_all）
+	python scripts/init_db.py
+
 db-migrate: ## 运行 Alembic 数据库迁移
-	cd shared/models && alembic upgrade head
+	alembic upgrade head
 
 db-migrate-new: ## 创建新的 Alembic 迁移 (usage: make db-migrate-new msg="add users table")
-	cd shared/models && alembic revision --autogenerate -m "$(msg)"
+	alembic revision --autogenerate -m "$(msg)"
 
 db-seed: ## 运行数据库种子脚本
 	python scripts/seed_data.py

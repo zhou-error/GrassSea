@@ -1,0 +1,289 @@
+# ============================================================
+# GrassSea AI — 应用服务编排
+# 配合 docker-compose.yml (中间件) 使用:
+#   docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
+# ============================================================
+
+services:
+  # ============================================================
+  # 模型网关 — LLM API 统一入口
+  # ============================================================
+  model-gateway:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: grasssea-app:latest
+    container_name: grasssea-model-gateway
+    restart: unless-stopped
+    environment:
+      - APP_NAME=model-gateway
+      - SERVICE_PORT=8004
+      - APP_ENV=production
+      - APP_DEBUG=false
+      # 加密密钥目录（与 /app/.secrets 只读挂载配合）
+      - SECRETS_DIR=/app/.secrets
+      # PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-grasssea}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-grasssea}
+      - POSTGRES_DB=${POSTGRES_DB:-grasssea}
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # LLM
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-https://api.anthropic.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      # Embedding
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
+      # 搜索
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY:-}
+    ports:
+      - "8004:8004"
+    volumes:
+      # 加密密钥只读挂载：现在所有服务都能自行加载 LLM Key
+      - ./docker-data/secrets:/app/.secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn services.model_gateway.main:app
+      --host 0.0.0.0
+      --port 8004
+    networks:
+      - grasssea-net
+
+  # ============================================================
+  # 对话服务 — 多轮对话管理 + 流式输出
+  # ============================================================
+  chat-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: grasssea-app:latest
+    container_name: grasssea-chat-service
+    restart: unless-stopped
+    environment:
+      - APP_NAME=chat-service
+      - SERVICE_PORT=8001
+      - APP_ENV=production
+      - APP_DEBUG=false
+      # PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-grasssea}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-grasssea}
+      - POSTGRES_DB=${POSTGRES_DB:-grasssea}
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # RabbitMQ
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-grasssea}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-grasssea}
+      # 模型网关
+      - MODEL_GATEWAY_URL=http://model-gateway:8004
+      - AGENT_SERVICE_URL=http://agent-service:8002
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-service:8003
+      # Secrets 加密存储目录
+      - SECRETS_DIR=/app/.secrets
+    ports:
+      - "8001:8001"
+    volumes:
+      - type: bind
+        source: ./docker-data/secrets
+        target: /app/.secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      model-gateway:
+        condition: service_started
+    command: >
+      uvicorn services.chat_service.main:app
+      --host 0.0.0.0
+      --port 8001
+    networks:
+      - grasssea-net
+
+  # ============================================================
+  # 智能体服务 — Agent 调度 + 多智能体协作
+  # ============================================================
+  agent-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: grasssea-app:latest
+    container_name: grasssea-agent-service
+    restart: unless-stopped
+    environment:
+      - APP_NAME=agent-service
+      - SERVICE_PORT=8002
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - SECRETS_DIR=/app/.secrets
+      # 下游服务地址：容器内必须用服务名，不能用 localhost
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-service:8003
+      # PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-grasssea}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-grasssea}
+      - POSTGRES_DB=${POSTGRES_DB:-grasssea}
+      # MongoDB
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_USER=${MONGODB_USER:-grasssea}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD:-grasssea}
+      - MONGODB_DB=${MONGODB_DB:-grasssea}
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # RabbitMQ
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-grasssea}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-grasssea}
+      # 模型网关
+      - MODEL_GATEWAY_URL=http://model-gateway:8004
+      # LLM API Keys
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-https://api.anthropic.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      # Embedding
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
+      # 搜索
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY:-}
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./docker-data/secrets:/app/.secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      model-gateway:
+        condition: service_started
+    command: >
+      uvicorn services.agent_service.main:app
+      --host 0.0.0.0
+      --port 8002
+    networks:
+      - grasssea-net
+
+  # ============================================================
+  # 知识库服务 — RAG + 文档处理
+  # ============================================================
+  knowledge-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+    image: grasssea-app:latest
+    container_name: grasssea-knowledge-service
+    restart: unless-stopped
+    environment:
+      - APP_NAME=knowledge-service
+      - SERVICE_PORT=8003
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - SECRETS_DIR=/app/.secrets
+      # PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-grasssea}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-grasssea}
+      - POSTGRES_DB=${POSTGRES_DB:-grasssea}
+      # Milvus
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      # MinIO
+      - MINIO_HOST=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-grasssea-admin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-grasssea-admin-secret}
+      - MINIO_BUCKET=${MINIO_BUCKET:-grasssea-files}
+      # 模型网关
+      - MODEL_GATEWAY_URL=http://model-gateway:8004
+      # 向量后端（本地 fastembed，离线可用，无需 API Key）
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-auto}
+      - LOCAL_EMBEDDING_MODEL=${LOCAL_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      - LOCAL_EMBEDDING_CACHE=/app/.fastembed
+      - HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+      - HF_HUB_DISABLE_XET=1
+      # LLM API Keys
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-https://api.anthropic.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      # Embedding
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
+      # 搜索
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY:-}
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./docker-data/secrets:/app/.secrets:ro
+      # 复用宿主机已下载的向量模型，避免每次重建容器重新下载
+      - ./docker-data/fastembed:/app/.fastembed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      model-gateway:
+        condition: service_started
+    command: >
+      uvicorn services.knowledge_service.main:app
+      --host 0.0.0.0
+      --port 8003
+    networks:
+      - grasssea-net
+
+  # ============================================================
+  # 前端 — Nginx + React SPA
+  # ============================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.frontend
+    image: grasssea-frontend:latest
+    container_name: grasssea-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - agent-service
+      - chat-service
+      - model-gateway
+    networks:
+      - grasssea-net
+
+networks:
+  grasssea-net:
+    # 复用中间件网络，不创建新的
+    name: grasssea-net
+    external: true

@@ -1,0 +1,90 @@
+# ============================================================
+# GrassSea AI — Docker 构建排除文件
+# 这些文件/目录不会进入 Docker 构建上下文，减小镜像体积
+# ============================================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude
+.claude/
+
+# Python 缓存和编译产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+.coverage
+htmlcov/
+
+# Node / 前端
+frontend/node_modules/
+frontend/dist/
+.npm/
+*.tsbuildinfo
+
+# 环境变量 (不应入镜像)
+.env
+.env.local
+.env.*.local
+
+# 虚拟环境 (不应进入镜像)
+.venv/
+venv/
+
+# 本地工具缓存
+.uv-cache/
+
+# 教学与设计资料
+教学文件/
+
+# 开发辅助文件 (AI提示词、日记、产品设计)
+AI开发提示词/
+项目开发日记/
+ProductDesign/
+
+# 文档 (不需要打包进镜像)
+docs/
+
+# CI/CD
+.github/
+
+# Windows 脚本 (Docker 里用不了)
+start.bat
+stop.bat
+killall.bat
+
+# 日志
+*.log
+logs/
+
+# 备份
+backups/
+
+# 测试
+tests/
+
+# OS 文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Docker (避免递归)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+docker-data/

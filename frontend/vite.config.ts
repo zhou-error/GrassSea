@@ -10,8 +10,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': { target: 'http://localhost:8012', changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
-      '/ws': { target: 'ws://localhost:8002', ws: true },
+      '/api': { target: 'http://localhost:8001', changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
+      '/ws': { target: 'ws://localhost:8001', ws: true },
+      '/v1': { target: 'http://localhost:8004', changeOrigin: true },
     },
   },
 });

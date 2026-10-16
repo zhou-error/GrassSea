@@ -26,8 +26,8 @@ class AgentCapability:
     """能力声明"""
     name: str                              # 能力名称
     description: str                       # 能力描述
-    input_schema: dict                     # 输入 JSON Schema
-    output_schema: dict                    # 输出 JSON Schema
+    input_schema: dict = field(default_factory=dict)   # 输入 JSON Schema
+    output_schema: dict = field(default_factory=dict)  # 输出 JSON Schema
     tools: list[str] = field(default_factory=list)  # 关联工具 ID 列表
     estimated_latency_ms: int = 500        # 预估延迟（毫秒）
 
