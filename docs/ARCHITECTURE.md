@@ -2,7 +2,7 @@
 
 > **文档定位**：让新加入的工程师在不通读全部源码的前提下，准确理解本项目的整体结构、模块边界、调用链路、接口契约与核心功能。
 >
-> **代码基线**：`F:\GrassSea`，分支 `feature/desktop-native`（自 `develop` 分出）；代码 **129 个文件 / 12590 行**（Python 112 / 9846 行，TS·TSX 17 / 2744 行）。
+> **代码基线**：`F:\GrassSea`，分支 `feature/desktop-native`（自 `develop` 分出）；代码 **135 个文件 / 14,370 行**（Python 118 / 11,344 行，TS·TSX 17 / 3,026 行）。
 > **配套文件**：[`ARCHITECTURE-APPENDIX-INDEX.md`](./ARCHITECTURE-APPENDIX-INDEX.md) —— 全文件与符号索引（由脚本机械生成，含每个函数/类的**行号与签名**）。
 > **最近更新**：2026-10-16（新增「模型自主工具调用」能力后同步）
 >
@@ -235,11 +235,12 @@ GrassSea/
 |---|---|---|---|---|
 | M1 | 共享内核 | `shared/` | 配置、日志、密钥、向量化、**向量存储抽象**、数据模型、协议、中间件。**不含业务逻辑** | 38 文件 / 3013 行 |
 | M2 | 模型网关 | `services/model_gateway/` | 多模型路由、OpenAI 兼容接口、Token 统计 | 4 / 721 |
-| M3 | 对话服务 | `services/chat_service/` | BFF 代理 + 配置热更新 API | 3 / 450 |
+| M3 | 对话服务 | `services/chat_service/` | BFF 代理 + 配置热更新 + **附件处理** + **工作文件夹 API** + 桌面模式静态托管 | 4 / 900 |
 | M4 | 智能体编排 | `services/agent_service/` | 意图识别、任务规划、FSM、DAG 执行、Agent/工具注册、**模型自主工具调用** | 8 / 2,022 |
-| M5 | 知识库服务 | `services/knowledge_service/` | 文档入库、混合检索、重排、答案生成 | 6 / 1,385 |
+| M5 | 知识库服务 | `services/knowledge_service/` | 文档入库、混合检索、重排、答案生成（向量后端可插拔） | 6 / 1,385 |
 | M6 | 业务智能体 | `agents/` | 6 个专业 Agent，按能力粒度实现 | 13 / 573 |
-| M7 | 工具库 | `tools/` | 14 个工具 + 注册中心 + 引导 | 21 / 601 |
+| **M11** | **桌面形态** | `app/` | 单进程启动器 + 桌面窗口（分级策略）+ pythonnet 运行时配置 | 4 / ~420 |
+| M7 | 工具库 | `tools/` | **17 个工具**（含 3 个工作文件夹工具）+ 注册中心 + 引导 | 22 / 797 |
 | M8 | 前端 | `frontend/src/` | SPA：4 页面 + 6 组件 + 2 store + API 封装 | 15 / 2,664 |
 | M9 | 脚本 | `scripts/` | 初始化与维护脚本（非运行时） | 5 / 422 |
 | M10 | 测试 | `tests/` | 单元测试 | 5 / 377 |
@@ -711,6 +712,21 @@ sequenceDiagram
 | GET | `/tasks` | `list_tasks` | 109 | 内存任务列表 |
 | GET | `/agents` | `list_agents` | 116 | 已注册 Agent |
 | GET | `/tools` | `list_tool_definitions` | 131 | 全部工具 + 是否已暴露给模型自主调用 |
+
+### chat_service 新增端点（P3）
+
+| 方法 | 路径 | 说明 | 可用条件 |
+|---|---|---|---|
+| POST | `/attachments` | 上传附件并提取正文（50MB 上限） | 始终 |
+| GET | `/attachments/limits` | 附件限制说明（含图片不可解析声明） | 始终 |
+| GET | `/desktop/status` | 桌面模式与工作文件夹状态 | 始终 |
+| GET | `/workspace` | 当前工作文件夹与目录树摘要 | `DESKTOP_MODE=true` |
+| GET | `/workspace/list` | 列出目录（只列一层） | `DESKTOP_MODE=true` |
+| POST | `/workspace/set` | 直接设置工作文件夹路径 | `DESKTOP_MODE=true` |
+| POST | `/workspace/select` | 弹出系统原生文件夹对话框 | `DESKTOP_MODE=true` |
+
+> 桌面模式下 chat_service 还托管 `frontend/dist`（含 SPA 回退），并内置 `/api` 前缀剥离中间件
+> ——Docker 形态下这两件事由 nginx 完成。
 | GET | `/admin/status` | `admin_status` | 123 | 配置状态（⚠️ 无鉴权） |
 | POST | `/admin/reload` | `reload_config` | 135 | 直接 setattr 修改全局 Settings（⚠️ 无鉴权，见第 9 章） |
 | POST | `/chat` | `chat` | 192 | 主编排入口 |
@@ -929,7 +945,7 @@ sequenceDiagram
 | 步骤跳过 ≠ 失败 | `executor.py` `_record_step` | `not_implemented` 归入 skipped |
 | 依赖旁路 | `planner.py:307 _normalize_llm_plan` | 把不可执行步骤从依赖链摘除，防止整单死锁 |
 | 工具可执行白名单 | `planner.py:128` / `planner.py:291` | 仅白名单内的工具/动作会被规则路径派发 |
-| **模型可用工具白名单** | `tool_loop.py:55 MODEL_EXPOSED_TOOLS` | 默认只暴露 5 个已实现工具，避免模型把轮次浪费在必然 not_implemented 的调用上 |
+| **模型可用工具白名单** | `tool_loop.py:55 MODEL_EXPOSED_TOOLS` | 默认暴露 **8 个**：5 个已实现计算/核查工具 + 3 个工作文件夹工具（后者仅在桌面模式且已选目录时真正执行） |
 | **工具调用总开关** | `config.py:177 TOOL_CALLING_ENABLED` | 关闭后 `/chat` 完全回到规则规划路径 |
 | 上传类型白名单 | `knowledge_service/main.py:253` | `.pdf / .txt / .md / .markdown` |
 | 知识库过滤 | `retrieval.py:94` | `knowledge_bases=None` 时检索全部，否则按 `expr` 过滤 |
@@ -958,6 +974,8 @@ sequenceDiagram
 | | `LOCAL_EMBEDDING_MODEL` / `LOCAL_EMBEDDING_CACHE` / `HF_ENDPOINT` | BAAI/bge-small-zh-v1.5 / 空 / https://hf-mirror.com | 本地向量 |
 | 服务发现 | `MODEL_GATEWAY_URL` / `AGENT_SERVICE_URL` / `KNOWLEDGE_SERVICE_URL` | localhost:8004/8002/8003 | 跨服务调用 |
 | 密钥 | `SECRETS_DIR` | 空 → 自动探测 `docker-data/secrets` | `secrets.py:33` |
+| **桌面模式** | `DESKTOP_MODE` | false | 由 `--desktop` 置 true；开启后启用工作文件夹与原生对话框 |
+| | `WORKSPACE_ROOT` | 空 | 预置工作文件夹（留空则界面选择） |
 | **向量后端** | `VECTOR_BACKEND` | local（代码默认）/ milvus（Docker 默认） | 决定 RAG 底层存储；桌面用 local，服务器用 milvus |
 | | `VECTOR_STORE_PATH` | 空 | 向量库文件路径；空则用 `<DATA_DIR>/vectorstore/knowledge.sqlite3` |
 | | `DATA_DIR` | 空 | 本地数据目录；空则用 `<项目根>/data` |
@@ -1170,9 +1188,9 @@ graph LR
 ## 10.4 分析范围声明与未覆盖内容
 
 **已覆盖**
-- 全部 **125 个代码文件**（108 `.py` + 17 `.ts/.tsx`），逐文件符号见[附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)。
+- 全部 **135 个代码文件**（118 `.py` + 17 `.ts/.tsx`），逐文件符号见[附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)。
 - 构建与配置文件：`pyproject.toml`、`uv.lock`、`alembic.ini`、`Makefile`、`docker-compose.yml`、`docker-compose.app.yml`、`infrastructure/docker/Dockerfile*`、`frontend/vite.config.ts`、`frontend/tsconfig.json`、`.env.example`、`.gitignore`、`.dockerignore`。
-- 35 条 HTTP 路由、111 个类、569 个符号。
+- 43 条 HTTP 路由、121 个类、685 个符号。
 
 **未覆盖（非代码资产，按要求仅登记）**
 | 目录 | 规模 | 说明 |
