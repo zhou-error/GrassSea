@@ -27,69 +27,158 @@
 
 ---
 
-## 🚀 快速开始
+## 🚀 首次运行指引（从零到可用）
 
-### 环境要求
+> 面向第一次克隆本仓库的人。按顺序做完即可跑起来，全程约 10–20 分钟（不含首次拉镜像与下载向量模型）。
+
+### 0. 环境要求
 
 | 软件 | 版本 | 说明 |
 |------|------|------|
 | Python | 3.11+（推荐 3.12） | 后端服务 |
-| uv | 0.11+ | 依赖管理（.venv 由 uv 创建，不含 pip） |
+| uv | 0.11+ | 依赖管理（`.venv` 由 uv 创建，**不含 pip**） |
 | Node.js | 18+ | 前端构建 |
-| Docker Desktop | 24+ | 中间件容器（仅中间件，不需要 K8s） |
+| Docker Desktop | 24+ | 中间件容器（不需要 K8s） |
 
-### 1. 启动中间件
+> ⚠️ **两个必读提示**
+> 1. 请始终用 `uv run python ...`，不要依赖全局 `python`（很可能是 3.14，与本项目依赖不符）。
+> 2. 本项目 `.venv` 由 uv 管理，**没有 pip**；装包请用 `uv add` / `uv sync`。
+
+### 1. 获取代码
+
+```bash
+git clone https://github.com/zhou-error/GrassSea.git
+cd GrassSea
+```
+
+### 2. 准备配置文件
+
+```bash
+cp .env.example .env        # Windows: copy .env.example .env
+```
+
+> `.env` 不是必须的（代码里都有默认值），但建议复制一份——端口、口令都在这里改。
+
+### 3. 安装后端依赖
+
+```bash
+# 国内网络建议先设镜像，否则会一直访问 pypi.org 直到超时
+export UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple      # Linux / macOS
+$env:UV_DEFAULT_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"    # Windows PowerShell
+
+uv sync --extra dev        # 加 --extra dev 才会安装 pytest / ruff / mypy 等开发工具
+```
+
+> 仓库已自带 `uv.lock`，且锁文件中的包源已指向清华镜像（`pypi.tuna.tsinghua.edu.cn`），国内开箱即用，通常无需再设环境变量。
+> 若想改用官方源：执行 `uv lock --default-index https://pypi.org/simple` 重新生成锁文件。
+
+### 4. 启动中间件
 
 ```bash
 docker compose up -d postgres mongodb redis rabbitmq minio
-# 需要 RAG 时追加: milvus-etcd milvus-minio milvus
+
+# 需要知识库（RAG）时再启动这三个
+docker compose up -d milvus-etcd milvus-minio milvus
 ```
 
-> 或使用 `make up`（等价于上面 8 个服务）。
+> 首次会拉取镜像（数 GB），耐心等待；建议给 Docker Desktop 分配 ≥4GB 内存。
+> 数据落在 `./docker-data/`（已 gitignore，不会被提交）。
 
-### 2. 安装后端依赖并建表
+### 5. 初始化数据库与对象存储
 
 ```bash
-uv sync                            # 或 uv pip install -e ".[dev]"
-cp -n .env.example .env            # 首次：复制配置模板
-uv run python scripts/init_db.py     # 建表 + 创建 timeseries schema + 超表（幂等）
-uv run python scripts/init_minio.py  # 初始化对象存储桶
-uv run python scripts/seed_data.py   # 写入系统配置 + 默认用户 admin（幂等）
+uv run python scripts/init_db.py      # 建表 + timeseries schema + 超表（幂等）
+uv run python scripts/seed_data.py    # 7 项系统配置 + 默认用户 admin（幂等）
+uv run python scripts/init_minio.py   # 创建对象存储桶
 ```
 
-### 3. 启动后端（4 个终端）
+> `seed_data.py` 会创建默认本地用户 **`admin`**。`projects` / `task_records` 等表的 `user_id` 是 NOT NULL，业务数据的 `owner_id` 用它即可。
+
+### 6. 启动后端（4 个终端）
 
 ```bash
+# 顺序建议：模型网关 → 知识库 → 智能体 → 对话服务
 uv run python -m uvicorn services.model_gateway.main:app     --host 0.0.0.0 --port 8004 --reload
 uv run python -m uvicorn services.knowledge_service.main:app --host 0.0.0.0 --port 8003 --reload
 uv run python -m uvicorn services.agent_service.main:app     --host 0.0.0.0 --port 8002 --reload
 uv run python -m uvicorn services.chat_service.main:app      --host 0.0.0.0 --port 8001 --reload
 ```
 
-> ⚠️ 必须使用项目虚拟环境（`uv run python ...` 或先激活 `.venv`）。系统里的全局 `python` 是 3.14，与本项目依赖不一致。
->
-> 建议启动顺序：模型网关 → 知识库 → 智能体 → 对话服务。
-> 对话服务启动时会向其余服务推送加密密钥，下游未就绪时会重试约 5 次（最长约 45 秒）。
+> 对话服务启动时会向其余服务推送加密密钥，下游未就绪时会重试约 5 次（最长约 45 秒）——属正常现象。
 
-### 4. 启动前端
+### 7. 启动前端
 
 ```bash
 cd frontend
-npm install
+npm install        # 国内可加 --registry=https://registry.npmmirror.com
 npm run dev        # http://localhost:3000
 ```
 
-> 种子脚本会写入 7 项系统配置，并创建一个默认本地用户 **`admin`**。
-> `projects` / `task_records` 等表的 `user_id` 为 NOT NULL，业务数据的 `owner_id` 用该用户即可。
-
-### 5. 验证
+### 8. 验证
 
 ```bash
 curl http://localhost:8001/health   # 对话服务
-curl http://localhost:8002/health   # 智能体编排（返回已注册 Agent 数量）
+curl http://localhost:8002/health   # 智能体编排（应为 registered_agents: 6, registered_tools: 14）
 curl http://localhost:8003/health   # 知识库
 curl http://localhost:8004/health   # 模型网关
 ```
+
+浏览器打开 <http://localhost:3000>，左侧应能看到「项目 / 知识库 / 智能体」。
+
+### 9. 配置大模型 API Key（可选，但影响体验）
+
+**不配也能用**：稳性 / 阻力 / 静水力等计算类任务完全离线可用。
+
+| 功能 | 没有 Key 时 |
+|------|-------------|
+| 知识库检索 | 仍能召回原文片段，但回答会降级为「离线模式」摘要 |
+| 多智能体协同任务 | 退化为规则规划，部分步骤显示「未实现」 |
+| 闲聊 | 返回固定话术 |
+
+**配置方式（任选其一）**
+
+1. **Web 界面**：打开「设置」页 → 填入 DeepSeek API Key → 保存。
+   Key 会用 Fernet 加密后存到 `docker-data/secrets/.grasssea_secrets`，**明文不落盘、不写入 `.env`、不会被提交**。
+2. **接口调用**：
+
+```bash
+curl -X PUT http://localhost:8001/config/update \
+  -H "Content-Type: application/json" \
+  -d '{"key":"DEEPSEEK_API_KEY","value":"你的Key"}'
+```
+
+### 10. 首次使用知识库的提示
+
+第一次上传文档或检索时，会自动下载本地向量模型 `BAAI/bge-small-zh-v1.5`（约 95MB，走 `HF_ENDPOINT=https://hf-mirror.com`）。**需要等几分钟**，日志出现 `Local embedding model loaded` 即就绪。
+
+---
+
+## 🐳 可选：全部用 Docker 运行
+
+不装 Python 环境也能跑：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
+```
+
+- 前端：<http://localhost>（80 端口）；后端仍为 8001–8004
+- 改了代码后必须重新 `build` 才会生效
+- 镜像构建默认走国内源（清华 apt/pip、npmmirror），可用 `--build-arg` 覆盖
+
+---
+
+## 🧰 常见问题排查
+
+| 症状 | 原因 | 处理 |
+|------|------|------|
+| `uv sync` 长时间无响应或超时 | 默认访问 pypi.org | 先设 `UV_DEFAULT_INDEX` 为国内镜像（见第 3 步） |
+| `No module named pip` | 本项目 venv 由 uv 创建 | 用 `uv add` / `uv run`，不要用 `pip` |
+| `ModuleNotFoundError: xxx` | 依赖没装全 | 重跑 `uv sync --extra dev` |
+| 8001~8004 端口被占用 | 上次的服务没退干净 | Windows：`taskkill /f /im python.exe` |
+| 对话页显示「任务已创建」但一直没有进度 | 下游服务没起或端口不通 | 依次检查 4 个 `/health` |
+| 知识库上传成功但检索不到 | 查询时限定了不含该文档的知识库 | 查询时让 `knowledge_bases` 留空即检索全部 |
+| 换过 embedding 模型后报维度错误 | Milvus 集合维度与当前模型不符 | `uv run python scripts/reset_knowledge_base.py` 后重新上传 |
+| 容器里跑的还是旧代码 | 镜像是之前构建的 | 重新 `build` 后 `up -d` |
 
 ---
 
