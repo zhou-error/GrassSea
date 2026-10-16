@@ -1,0 +1,1 @@
+uv run python -m app.launcher --desktop
