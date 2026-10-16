@@ -58,6 +58,10 @@ MODEL_EXPOSED_TOOLS: frozenset[str] = frozenset({
     "resistance",
     "hull_transform",
     "reg_check",
+    # 工作文件夹（仅桌面模式且用户已选目录时才会真正执行）
+    "workspace_list",
+    "workspace_read",
+    "workspace_write",
 })
 
 

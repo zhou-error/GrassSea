@@ -9,9 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 
+import asyncio
 import os
 
 from services.chat_service.attachments import MAX_TEXT_CHARS, process_upload
+from shared.utils import workspace as ws
 from services.chat_service.config_api import router as config_router
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging
@@ -181,6 +183,107 @@ async def attachment_limits():
         "image_understood": False,
         "note": "当前模型不支持图片理解，图片仅接收与保存，不会被解析。",
     }
+
+
+# ============================================================
+# 桌面模式：工作文件夹
+# 仅在 DESKTOP_MODE=true（app.launcher --desktop）时可用。
+# 工作文件夹状态保存在 shared.utils.workspace 模块级变量中，
+# 桌面模式下四个服务同进程，因此 chat_service 设置后 agent_service 的工具能直接读到。
+# ============================================================
+
+
+def _require_desktop() -> None:
+    if not settings.DESKTOP_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="工作文件夹功能仅在桌面模式下可用（请用 app.launcher --desktop 启动）",
+        )
+
+
+@app.get("/desktop/status")
+async def desktop_status():
+    """桌面模式状态"""
+    root = ws.get_root()
+    return {
+        "desktop_mode": settings.DESKTOP_MODE,
+        "workspace_selected": root is not None,
+        "workspace_root": str(root) if root else "",
+    }
+
+
+@app.get("/workspace")
+async def workspace_info():
+    """当前工作文件夹与目录树摘要"""
+    _require_desktop()
+    root = ws.get_root()
+    if root is None:
+        return {"selected": False, "root": "", "tree": [], "truncated": False}
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": info["root"], "tree": info["lines"], "truncated": info["truncated"]}
+
+
+@app.get("/workspace/list")
+async def workspace_list(path: str = ""):
+    """列出工作文件夹中的目录（只列一层）"""
+    _require_desktop()
+    try:
+        return ws.list_dir(path)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/workspace/set")
+async def workspace_set(payload: dict):
+    """直接设置工作文件夹（手动输入路径或前端传入选中的路径）"""
+    _require_desktop()
+    path = str((payload or {}).get("path") or "")
+    try:
+        root = ws.set_root(path)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
+
+
+@app.post("/workspace/select")
+async def workspace_select():
+    """弹出系统原生文件夹选择对话框
+
+    tkinter 的对话框是阻塞调用，放到线程中执行以免卡住事件循环。
+    """
+    _require_desktop()
+
+    def _pick() -> str:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            root.attributes("-topmost", True)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            chosen = filedialog.askdirectory(title="选择 GrassSea 工作文件夹")
+        finally:
+            root.destroy()
+        return chosen or ""
+
+    try:
+        chosen = await asyncio.to_thread(_pick)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"无法打开文件夹对话框：{exc}") from exc
+
+    if not chosen:
+        return {"selected": False, "root": "", "tree": [], "truncated": False, "cancelled": True}
+
+    try:
+        root = ws.set_root(chosen)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
 
 
 @app.get("/tools")

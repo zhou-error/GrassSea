@@ -182,6 +182,13 @@ class Settings(BaseSettings):
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
 
+    # --- 桌面模式与工作文件夹 ---
+    # 桌面模式开关：由 app.launcher --desktop 置为 true；
+    # 开启后才会启用工作文件夹读写与原生对话框等本机能力
+    DESKTOP_MODE: bool = False
+    # 预置的工作文件夹（留空则由用户在界面上选择）
+    WORKSPACE_ROOT: str = ""
+
     # --- 工具调用（由模型自主决定调用哪个工具）---
     # 总开关：关闭后 /chat 回到原有的规则规划路径
     TOOL_CALLING_ENABLED: bool = True

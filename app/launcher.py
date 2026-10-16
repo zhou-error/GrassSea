@@ -231,6 +231,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", action="store_true", help="输出更详细的日志")
     parser.add_argument("--desktop", action="store_true", help="启动服务并打开桌面窗口")
     parser.add_argument(
+        "--no-window",
+        action="store_true",
+        help="配合 --desktop：只启动服务与桌面模式能力，不打开窗口",
+    )
+    parser.add_argument(
         "--prefer",
         default="auto",
         choices=("auto", "pywebview", "browser-app", "web"),
@@ -247,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
         forwarded: list[str] = ["--prefer", args.prefer]
         if args.verbose:
             forwarded.append("--verbose")
+        if args.no_window:
+            forwarded.append("--no-window")
         return desktop_main(forwarded)
 
     try:
