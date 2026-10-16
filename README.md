@@ -27,7 +27,36 @@
 
 ---
 
-## 🚀 首次运行指引（从零到可用）
+## 🖥️ 两种运行形态
+
+本项目支持**桌面形态**（本机直接使用，不需要 Docker）与**服务器形态**（Docker Compose），
+同一套代码靠配置切换。
+
+| | 🖥️ 桌面形态 | 🐳 服务器形态 |
+|---|---|---|
+| 启动 | `uv run python -m app.launcher --desktop` | `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d` |
+| 外部中间件 | **零**（内置 SQLite 向量后端） | PostgreSQL · MongoDB · Redis · RabbitMQ · Milvus · MinIO |
+| 数据位置 | `<项目根>/data/` | `./docker-data/` |
+| 界面 | 无边框桌面窗口（Edge WebView 内核） | nginx 托管 `http://localhost` |
+| 附件上传 / 工作文件夹 | ✅ 支持 | 附件 ✅ / 工作文件夹 ❌ |
+
+```bash
+# 桌面形态（推荐个人使用）
+uv sync --extra dev
+uv run python -m app.launcher --desktop
+
+# 只自检不启动
+uv run python -m app.launcher --check
+```
+
+> 桌面版详细说明（数据目录、附件类型、工作文件夹、已知限制、开发指引）见
+> **[docs/DESKTOP_GUIDE.md](./docs/DESKTOP_GUIDE.md)**。
+> 架构与模块边界见 **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)**；
+> 新增工具见 **[docs/TOOL_DEVELOPMENT_GUIDE.md](./docs/TOOL_DEVELOPMENT_GUIDE.md)**。
+
+---
+
+## 🚀 服务器形态：首次运行指引（从零到可用）
 
 > 面向第一次克隆本仓库的人。按顺序做完即可跑起来，全程约 10–20 分钟（不含首次拉镜像与下载向量模型）。
 

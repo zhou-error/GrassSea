@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 
+import asyncio
 import os
+from pathlib import Path
 
+from services.chat_service.attachments import MAX_TEXT_CHARS, process_upload
+from shared.utils import workspace as ws
 from services.chat_service.config_api import router as config_router
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging
@@ -44,6 +48,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _strip_api_prefix(request: Request, call_next):
+    """桌面模式下剥离 /api 前缀
+
+    Docker 形态由 nginx 去掉 /api 再转发；桌面模式没有 nginx，
+    前端仍以 /api 为前缀调用，因此这里补上同样的处理。
+    """
+    if settings.DESKTOP_MODE and request.scope.get("path", "").startswith("/api/"):
+        request.scope["path"] = request.scope["path"][4:]
+        raw = request.scope.get("raw_path")
+        if raw:
+            request.scope["raw_path"] = raw[4:]
+    return await call_next(request)
 
 
 app.include_router(config_router)
@@ -136,9 +155,195 @@ async def proxy_agents():
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
 
+#: 单个附件大小上限（字节）——防止误传超大文件撑爆内存与上下文
+MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
+
+@app.post("/attachments")
+async def upload_attachment(file: UploadFile = File(...)):
+    """接收单个附件：落盘 + 提取正文，返回描述符
+
+    前端拿到描述符后，在 POST /chat 的 attachments 字段里回传，
+    由智能体编排服务注入模型上下文。图片不会被解析（除非配置了视觉模型）。
+    """
+    content = await file.read()
+    if len(content) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"附件过大：{len(content)} 字节，上限 {MAX_ATTACHMENT_BYTES} 字节",
+        )
+    if not content:
+        raise HTTPException(status_code=400, detail="附件内容为空")
+
+    attachment = process_upload(
+        file.filename or "upload.bin",
+        content,
+        file.content_type or "",
+    )
+    logger.info(
+        "Attachment received",
+        filename=attachment.filename,
+        kind=attachment.kind,
+        size=attachment.size,
+        chars=attachment.chars,
+    )
+    return attachment.to_dict()
+
+
+@app.get("/attachments/limits")
+async def attachment_limits():
+    """附件限制说明，供前端展示提示文案"""
+    return {
+        "max_attachment_bytes": MAX_ATTACHMENT_BYTES,
+        "max_text_chars_per_file": MAX_TEXT_CHARS,
+        "image_understood": False,
+        "note": "当前模型不支持图片理解，图片仅接收与保存，不会被解析。",
+    }
+
+
+# ============================================================
+# 桌面模式：工作文件夹
+# 仅在 DESKTOP_MODE=true（app.launcher --desktop）时可用。
+# 工作文件夹状态保存在 shared.utils.workspace 模块级变量中，
+# 桌面模式下四个服务同进程，因此 chat_service 设置后 agent_service 的工具能直接读到。
+# ============================================================
+
+
+def _require_desktop() -> None:
+    if not settings.DESKTOP_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="工作文件夹功能仅在桌面模式下可用（请用 app.launcher --desktop 启动）",
+        )
+
+
+@app.get("/desktop/status")
+async def desktop_status():
+    """桌面模式状态"""
+    root = ws.get_root()
+    return {
+        "desktop_mode": settings.DESKTOP_MODE,
+        "workspace_selected": root is not None,
+        "workspace_root": str(root) if root else "",
+    }
+
+
+@app.get("/workspace")
+async def workspace_info():
+    """当前工作文件夹与目录树摘要"""
+    _require_desktop()
+    root = ws.get_root()
+    if root is None:
+        return {"selected": False, "root": "", "tree": [], "truncated": False}
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": info["root"], "tree": info["lines"], "truncated": info["truncated"]}
+
+
+@app.get("/workspace/list")
+async def workspace_list(path: str = ""):
+    """列出工作文件夹中的目录（只列一层）"""
+    _require_desktop()
+    try:
+        return ws.list_dir(path)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/workspace/set")
+async def workspace_set(payload: dict):
+    """直接设置工作文件夹（手动输入路径或前端传入选中的路径）"""
+    _require_desktop()
+    path = str((payload or {}).get("path") or "")
+    try:
+        root = ws.set_root(path)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
+
+
+@app.post("/workspace/select")
+async def workspace_select():
+    """弹出系统原生文件夹选择对话框
+
+    tkinter 的对话框是阻塞调用，放到线程中执行以免卡住事件循环。
+    """
+    _require_desktop()
+
+    def _pick() -> str:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            root.attributes("-topmost", True)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            chosen = filedialog.askdirectory(title="选择 GrassSea 工作文件夹")
+        finally:
+            root.destroy()
+        return chosen or ""
+
+    try:
+        chosen = await asyncio.to_thread(_pick)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"无法打开文件夹对话框：{exc}") from exc
+
+    if not chosen:
+        return {"selected": False, "root": "", "tree": [], "truncated": False, "cancelled": True}
+
+    try:
+        root = ws.set_root(chosen)
+    except ws.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    info = ws.tree(max_depth=2, max_entries=200)
+    return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
+
+
+@app.get("/tools")
+async def proxy_tools():
+    """转发工具清单到智能体编排服务 (8002)
+
+    返回每个工具的 schema 与是否已暴露给模型自主调用。
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{AGENT_SERVICE_URL}/tools")
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
 @app.get("/task/{task_id}/status")
 async def proxy_task_status(task_id: str):
     """转发任务状态查询到智能体编排服务 (8002)"""
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(f"{AGENT_SERVICE_URL}/task/{task_id}/status")
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+# ============================================================
+# 前端静态托管（桌面模式）
+# Docker 形态下前端由 nginx 托管，这里只是为了 app.launcher --desktop 时
+# 能在同一端口上同时提供界面与 API。必须放在所有 API 路由之后注册。
+# ============================================================
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if (_FRONTEND_DIST / "index.html").exists():
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    _ASSETS = _FRONTEND_DIST / "assets"
+    if _ASSETS.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_ASSETS)), name="frontend-assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        """SPA 前端路由回退：静态文件命中则返回，否则一律回到 index.html"""
+        candidate = _FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_FRONTEND_DIST / "index.html"))
+
+    logger.info("前端静态资源已挂载", dist=str(_FRONTEND_DIST))
+else:
+    logger.info("未发现前端构建产物（frontend/dist），仅提供 API")

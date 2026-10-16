@@ -161,60 +161,121 @@ class ModelRouter:
 
         raise ValueError(f"No available model for task '{request.task_type}'")
 
+    # 支持工具调用的 provider（其余 provider 会忽略 tools 参数）
+    TOOL_CAPABLE_PROVIDERS = {"deepseek"}
+
     async def complete(
-        self, route: ModelRouteResult, stream: bool = False
+        self,
+        route: ModelRouteResult,
+        stream: bool = False,
+        messages: list[dict] | None = None,
+        tools: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> dict:
-        """非流式调用 LLM"""
+        """非流式调用 LLM
+
+        messages / tools 由此处透传给上游；tools 为 OpenAI function-calling 格式。
+        返回统一字典：content / tool_calls / finish_reason / prompt_tokens / completion_tokens。
+        """
+        if tools and route.provider not in self.TOOL_CAPABLE_PROVIDERS:
+            logger.warning(
+                "Provider does not support tool calling, tools ignored",
+                provider=route.provider,
+            )
+            tools = None
+
         if route.provider == "deepseek":
-            return await self._call_deepseek(route, stream=False)
+            return await self._call_deepseek(
+                route, stream=False, messages=messages, tools=tools,
+                temperature=temperature, max_tokens=max_tokens,
+            )
         elif route.provider == "anthropic":
-            return await self._call_claude(route, stream=False)
+            return await self._call_claude(
+                route, stream=False, messages=messages,
+                temperature=temperature, max_tokens=max_tokens,
+            )
         else:
             raise ValueError(f"Unknown provider: {route.provider}")
 
     async def complete_stream(
-        self, route: ModelRouteResult
+        self,
+        route: ModelRouteResult,
+        messages: list[dict] | None = None,
     ) -> AsyncIterator[dict]:
         """流式调用 LLM"""
         if route.provider == "deepseek":
-            async for chunk in self._call_deepseek_stream(route):
+            async for chunk in self._call_deepseek_stream(route, messages=messages):
                 yield chunk
         elif route.provider == "anthropic":
-            async for chunk in self._call_claude_stream(route):
+            async for chunk in self._call_claude_stream(route, messages=messages):
                 yield chunk
         else:
             raise ValueError(f"Unknown provider: {route.provider}")
 
     async def _call_deepseek(
-        self, route: ModelRouteResult, stream: bool = False
+        self,
+        route: ModelRouteResult,
+        stream: bool = False,
+        messages: list[dict] | None = None,
+        tools: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> dict:
-        """调用 DeepSeek API (OpenAI 兼容)"""
+        """调用 DeepSeek API (OpenAI 兼容)
+
+        此前该实现写死了 {"role": "user", "content": "ping"} 占位消息，
+        真实请求内容从未送达模型。现已改为透传调用方消息。
+        tools 为 OpenAI function-calling 格式；上游不支持时自动去掉并重试一次。
+        """
         url = f"{route.base_url}/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {route.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
+        payload: dict = {
             "model": route.model,
-            "messages": [{"role": "user", "content": "ping"}],  # 占位
+            "messages": messages or [{"role": "user", "content": "ping"}],
             "stream": stream,
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         response = await self._http_client.post(url, json=payload, headers=headers)
+
+        # 降级：上游不认识 tools 参数时，去掉后重试一次，保证不破坏基础对话
+        if response.status_code >= 400 and "tools" in payload:
+            logger.warning(
+                "Upstream rejected tools, retrying without them",
+                status=response.status_code,
+                body=response.text[:200],
+            )
+            payload.pop("tools", None)
+            payload.pop("tool_choice", None)
+            response = await self._http_client.post(url, json=payload, headers=headers)
+
         response.raise_for_status()
         data = response.json()
         choice = data["choices"][0]
+        message = choice.get("message") or {}
 
         return {
-            "content": choice["message"]["content"],
+            "content": message.get("content") or "",
+            "tool_calls": message.get("tool_calls") or [],
+            "finish_reason": choice.get("finish_reason", "stop"),
             "prompt_tokens": data.get("usage", {}).get("prompt_tokens", 0),
             "completion_tokens": data.get("usage", {}).get("completion_tokens", 0),
         }
 
     async def _call_deepseek_stream(
-        self, route: ModelRouteResult
+        self, route: ModelRouteResult, messages: list[dict] | None = None
     ) -> AsyncIterator[dict]:
-        """DeepSeek 流式调用"""
+        """DeepSeek 流式调用（同样透传真实消息）"""
         url = f"{route.base_url}/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {route.api_key}",
@@ -222,7 +283,7 @@ class ModelRouter:
         }
         payload = {
             "model": route.model,
-            "messages": [{"role": "user", "content": "ping"}],
+            "messages": messages or [{"role": "user", "content": "ping"}],
             "stream": True,
         }
 
@@ -241,21 +302,60 @@ class ModelRouter:
                     delta = choice.get("delta", {})
                     yield {"content": delta.get("content", "")}
 
+    @staticmethod
+    def _to_anthropic_messages(messages: list[dict] | None) -> tuple[str, list[dict]]:
+        """把 OpenAI 风格消息转成 Anthropic 格式
+
+        Anthropic 要求 system 独立成参数，且 messages 只含 user/assistant。
+        这里做最小可用转换：抽取 system，其余按角色映射，忽略 tool 消息。
+        """
+        if not messages:
+            return "", [{"role": "user", "content": "ping"}]
+        system_parts: list[str] = []
+        converted: list[dict] = []
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content") or ""
+            if role == "system":
+                system_parts.append(content)
+            elif role in ("user", "assistant"):
+                converted.append({"role": role, "content": content})
+            elif role == "tool":
+                # 工具结果以 user 消息形式回灌，保证上下文不丢
+                converted.append({"role": "user", "content": f"[工具返回] {content}"})
+        if not converted:
+            converted = [{"role": "user", "content": "ping"}]
+        return "\n\n".join(system_parts), converted
+
     async def _call_claude(
-        self, route: ModelRouteResult, stream: bool = False
+        self,
+        route: ModelRouteResult,
+        stream: bool = False,
+        messages: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> dict:
-        """调用 Claude API (Anthropic)"""
+        """调用 Claude API (Anthropic)
+
+        注意：Anthropic 分支当前不支持 tools（工具调用仅 deepseek provider 可用），
+        调用方 complete() 已在入口处剥离 tools 并告警。
+        """
         url = f"{route.base_url}/v1/messages"
         headers = {
             "x-api-key": route.api_key,
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
+        system_prompt, anthropic_messages = self._to_anthropic_messages(messages)
         payload = {
-            "model": route.model.replace("claude-", "claude-"),
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": "ping"}],
+            "model": route.model,
+            "max_tokens": max_tokens or 4096,
+            "messages": anthropic_messages,
         }
+        if system_prompt:
+            payload["system"] = system_prompt
+        if temperature is not None:
+            payload["temperature"] = temperature
 
         response = await self._http_client.post(url, json=payload, headers=headers)
         response.raise_for_status()
@@ -268,12 +368,14 @@ class ModelRouter:
 
         return {
             "content": text,
+            "tool_calls": [],
+            "finish_reason": data.get("stop_reason", "stop"),
             "prompt_tokens": data.get("usage", {}).get("input_tokens", 0),
             "completion_tokens": data.get("usage", {}).get("output_tokens", 0),
         }
 
     async def _call_claude_stream(
-        self, route: ModelRouteResult
+        self, route: ModelRouteResult, messages: list[dict] | None = None
     ) -> AsyncIterator[dict]:
         """Claude 流式调用"""
         url = f"{route.base_url}/v1/messages"
@@ -282,12 +384,15 @@ class ModelRouter:
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
+        system_prompt, anthropic_messages = self._to_anthropic_messages(messages)
         payload = {
-            "model": route.model.replace("claude-", "claude-"),
+            "model": route.model,
             "max_tokens": 4096,
-            "messages": [{"role": "user", "content": "ping"}],
+            "messages": anthropic_messages,
             "stream": True,
         }
+        if system_prompt:
+            payload["system"] = system_prompt
 
         async with self._http_client.stream(
             "POST", url, json=payload, headers=headers

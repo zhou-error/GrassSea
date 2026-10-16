@@ -23,7 +23,7 @@ const App: React.FC = () => (
         <Routes>
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/knowledge" element={<KnowledgePage />} />
-          <Route path="/tasks" element={<TaskCenterPage />} />
+          <Route path="/task-center" element={<TaskCenterPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>

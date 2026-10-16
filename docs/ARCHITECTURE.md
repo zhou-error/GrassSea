@@ -2,9 +2,9 @@
 
 > **文档定位**：让新加入的工程师在不通读全部源码的前提下，准确理解本项目的整体结构、模块边界、调用链路、接口契约与核心功能。
 >
-> **代码基线**：`F:\GrassSea`，分支 `develop`（默认分支 `master`）；代码 **123 个文件 / 11,356 行**（Python 107 / 8,774 行，TS·TSX 16 / 2,582 行）。
+> **代码基线**：`F:\GrassSea`，分支 `feature/desktop-native`（自 `develop` 分出）；代码 **135 个文件 / 14,370 行**（Python 118 / 11,344 行，TS·TSX 17 / 3,026 行）。
 > **配套文件**：[`ARCHITECTURE-APPENDIX-INDEX.md`](./ARCHITECTURE-APPENDIX-INDEX.md) —— 全文件与符号索引（由脚本机械生成，含每个函数/类的**行号与签名**）。
-> **生成时间**：2026-10-16
+> **最近更新**：2026-10-16（新增「模型自主工具调用」能力后同步）
 >
 > **准确性约定**：本文结论均可追溯到 `文件:行号`；无法从代码确证的内容一律标注「⚠️ 待确认」。本文只描述**代码现状**，不臆测设计意图；涉及取舍处标注「设计现状」。
 >
@@ -153,7 +153,7 @@ GrassSea/
 │   ├── research_agent/         #   研究员：均为 not_implemented
 │   └── doc_agent/              #   文档：均为 not_implemented
 ├── services/                   # 后端微服务（4 个独立进程）
-│   ├── agent_service/          #   编排：main / intent / planner / fsm / executor / registry
+│   ├── agent_service/          #   编排：main / intent / planner / fsm / executor / registry / tool_loop(模型自主调用工具)
 │   ├── chat_service/           #   BFF 代理：main + config_api（配置热更新）
 │   ├── knowledge_service/      #   RAG：main / ingestion / retrieval / reranker / generator
 │   └── model_gateway/          #   模型网关：main / router / token_tracker
@@ -166,9 +166,10 @@ GrassSea/
 │   ├── protocols/              #   Agent / Tool 抽象协议与注册中心接口
 │   ├── utils/                  #   config(206行) · logging · secrets · embedding(219行)
 │   ├── models/                 #   数据模型：postgres / timescale / mongodb / repository / alembic
+│   ├── vectorstore/            #   **向量存储抽象层**：base(协议) · local(内置SQLite) · milvus(服务器)
 │   └── middleware/             #   security（RBAC/HMAC/审计）· observability（OTel）
 ├── frontend/                   # React 18 SPA
-│   └── src/                    #   App.tsx(4 路由) · components(5) · pages(4) · stores(2) · api(1)
+│   └── src/                    #   App.tsx(4 路由) · components(6) · pages(4) · stores(2) · api(1)
 ├── scripts/                    # 运维脚本：init_db · seed_data · init_minio · reset_knowledge_base · backup_db
 ├── tests/                      # 单元测试（5 个文件 377 行）；integration / e2e 为空壳
 ├── infrastructure/docker/      # Dockerfile · Dockerfile.frontend · 各中间件初始化目录
@@ -190,6 +191,40 @@ GrassSea/
 
 > **已删除的历史文件**（勿在文档中引用）：`.github/workflows/ci.yml`、`infrastructure/k3s/*`、`docker-compose.full.yml`、`start.bat`/`stop.bat`、`services/*-service`（连字符空目录）。
 
+## 1.5 双形态运行（桌面 / 服务器）
+
+本项目支持两种运行形态，**同一套代码**通过配置切换，互不干扰：
+
+| | 🖥️ 桌面形态（新增） | 🐳 服务器形态（原样保留） |
+|---|---|---|
+| 向量后端 | `VECTOR_BACKEND=local`（内置 SQLite + numpy） | `VECTOR_BACKEND=milvus`（Docker 中默认） |
+| 外部中间件 | **零**（不需要 PostgreSQL / MongoDB / Redis / RabbitMQ / Milvus / MinIO） | PostgreSQL · MongoDB · Redis · RabbitMQ · Milvus · MinIO |
+| 启动方式 | **`uv run python -m app.launcher`**（单进程跑 4 个服务）+ 原生窗口（P3 规划中） | `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d` |
+| 数据落盘 | `<项目根>/data/`（向量库、模型缓存、密钥；已 gitignore） | `./docker-data/`（compose 卷） |
+| 适用场景 | 个人在 Windows 上直接使用 | 服务器部署、多副本、超大规模向量 |
+
+**为什么桌面形态不需要那些中间件**（依据第 8 章的审计结论）：
+
+| 组件 | 运行时使用情况 |
+|---|---|
+| PostgreSQL | ❌ 四个服务都不初始化；ORM 仅由 `scripts/` 与 Alembic 使用 |
+| MongoDB | ❌ 无任何写入路径 |
+| Redis | ❌ `init_redis()` 四个服务均未调用 |
+| RabbitMQ / Celery | ❌ 仅配置项，无代码引用 |
+| Milvus | ✅ **唯一真正在用的**——由新的可插拔向量后端替代 |
+| MinIO | ❌ 仅 `scripts/init_minio.py` 使用 |
+
+**单进程启动器**（`app/launcher.py`，227 行）：
+- 一个 Python 进程内用 4 个 asyncio 任务各起一个 uvicorn，监听 127.0.0.1:8001–8004
+- 跨服务地址自动由容器名改写为回环地址，且**跟随端口配置**（改 `CHAT_SERVICE_PORT` 等会同步改写内部 URL）
+- 统一接管 SIGINT/SIGTERM（四个 uvicorn 实例均关闭自动信号处理，避免互相覆盖）
+- `--check` 只做导入与配置自检，不监听端口
+- **服务代码零改动**，四个服务仍是独立 ASGI 应用；删除 `app/` 不影响 Docker 部署
+
+> `shared/models/database.py` 已**全面惰性化**：导入 ORM 模型不再创建 PostgreSQL 引擎，
+> 外部驱动（asyncpg / motor / redis / pymilvus）改为函数内延迟导入，
+> 因此桌面形态可以完全不安装、不连接这些组件。
+
 ---
 
 # 2. 模块与文件依赖关系
@@ -198,14 +233,15 @@ GrassSea/
 
 | # | 模块 | 路径 | 职责边界 | 规模 |
 |---|---|---|---|---|
-| M1 | 共享内核 | `shared/` | 配置、日志、密钥、向量化、数据模型、协议、中间件。**不含业务逻辑** | 32 文件 / 2,292 行 |
+| M1 | 共享内核 | `shared/` | 配置、日志、密钥、向量化、**向量存储抽象**、数据模型、协议、中间件。**不含业务逻辑** | 38 文件 / 3013 行 |
 | M2 | 模型网关 | `services/model_gateway/` | 多模型路由、OpenAI 兼容接口、Token 统计 | 4 / 721 |
-| M3 | 对话服务 | `services/chat_service/` | BFF 代理 + 配置热更新 API | 3 / 450 |
-| M4 | 智能体编排 | `services/agent_service/` | 意图识别、任务规划、FSM、DAG 执行、Agent/工具注册 | 7 / 1,741 |
-| M5 | 知识库服务 | `services/knowledge_service/` | 文档入库、混合检索、重排、答案生成 | 6 / 1,385 |
+| M3 | 对话服务 | `services/chat_service/` | BFF 代理 + 配置热更新 + **附件处理** + **工作文件夹 API** + 桌面模式静态托管 | 4 / 900 |
+| M4 | 智能体编排 | `services/agent_service/` | 意图识别、任务规划、FSM、DAG 执行、Agent/工具注册、**模型自主工具调用** | 8 / 2,022 |
+| M5 | 知识库服务 | `services/knowledge_service/` | 文档入库、混合检索、重排、答案生成（向量后端可插拔） | 6 / 1,385 |
 | M6 | 业务智能体 | `agents/` | 6 个专业 Agent，按能力粒度实现 | 13 / 573 |
-| M7 | 工具库 | `tools/` | 14 个工具 + 注册中心 + 引导 | 21 / 601 |
-| M8 | 前端 | `frontend/src/` | SPA：4 页面 + 5 组件 + 2 store + API 封装 | 14 / 2,560 |
+| **M11** | **桌面形态** | `app/` | 单进程启动器 + 桌面窗口（分级策略）+ pythonnet 运行时配置 | 4 / ~420 |
+| M7 | 工具库 | `tools/` | **17 个工具**（含 3 个工作文件夹工具）+ 注册中心 + 引导 | 22 / 797 |
+| M8 | 前端 | `frontend/src/` | SPA：4 页面 + 6 组件 + 2 store + API 封装 | 15 / 2,664 |
 | M9 | 脚本 | `scripts/` | 初始化与维护脚本（非运行时） | 5 / 422 |
 | M10 | 测试 | `tests/` | 单元测试 | 5 / 377 |
 
@@ -282,9 +318,11 @@ graph LR
 | `tools/bootstrap.py` | **全部 14 个工具类** | `agent_service/main.py`（lifespan） |
 | `services/agent_service/executor.py` | `agent_service/registry`、`shared.models.postgres.task`、`shared.protocols.agent`、`tools.base.registry` | `agent_service/main.py` |
 | `services/agent_service/planner.py` | `agent_service/intent`、`shared.utils.config` | `agent_service/main.py` |
-| `services/knowledge_service/retrieval.py` | `shared.utils.embedding`、`pymilvus` | `knowledge_service/main.py`、`generator.py` ⚠️ 待确认 |
+| `services/agent_service/tool_loop.py` | `shared.protocols.tool`、`shared.utils.config`、`model_gateway`（HTTP） | `agent_service/main.py`（lifespan + /chat） |
+| `services/knowledge_service/retrieval.py` | `shared.utils.embedding`、`shared.vectorstore` | `knowledge_service/main.py`、`generator.py` |
+| `shared/vectorstore/__init__.py` | `vectorstore.base`、按配置动态导入 `local` / `milvus` | `knowledge_service` 的 ingestion 与 retrieval |
 | `services/chat_service/config_api.py` | `shared.utils.secrets` | `chat_service/main.py` |
-| `frontend/src/api/index.ts` | `axios` | 全部 4 个页面 + `DAGPanel` |
+| `frontend/src/api/index.ts` | `axios` | 全部 4 个页面 + `DAGPanel` + `ToolTraceCard` |
 
 ## 2.4 循环依赖与耦合风险
 
@@ -389,6 +427,9 @@ sequenceDiagram
   CH-->>FE: JSON
   FE->>CH: GET /api/task/{id}/status（前端每 2s 轮询）
 ```
+
+> **说明**：上图中 `tool_call / professional_task` 分支现已**优先走链路 E（模型自主调用工具）**，仅在链路 E 不可用时才落入「创建任务 → 规则 DAG」路径。详见 3.1 链路 E 与 3.2 路径 3。
+
 
 ### 链路 B：任务执行（DAG 调度）
 
@@ -500,6 +541,54 @@ sequenceDiagram
   KM-->>FE: DocumentUploadResponse
 ```
 
+### 链路 E：模型自主调用工具（function calling）
+
+> 新增能力。模型不再由规则决定调用哪个工具，而是拿到工具清单与 JSON Schema 后**自行决定**。
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as 用户
+  participant AG as agent_service.chat (main.py:237)
+  participant TL as ToolCallLoop (tool_loop.py:80)
+  participant GW as model_gateway :8004
+  participant LLM as DeepSeek
+  participant TR as ToolRegistry
+
+  U->>AG: POST /chat 例如「帮我做一次船舶稳性计算」
+  AG->>AG: intent.classify 得到 tool_call
+  AG->>TL: run(message, session_id, user_id)
+  TL->>TL: list_exposed_tools 取 5 个已实现工具
+  TL->>TL: manifest_to_openai_tool 转成 OpenAI tools 定义
+  loop 最多 TOOL_CALL_MAX_ROUNDS 轮（默认 6）
+    TL->>GW: POST /v1/chat/completions {messages, tools}
+    GW->>LLM: 透传 messages 与 tools
+    LLM-->>GW: tool_calls 或 content
+    GW-->>TL: 返回 tool_calls / finish_reason
+    alt 无 tool_calls
+      TL-->>AG: 最终回答（ok=true）
+    else 有 tool_calls
+      TL->>TR: execute_tool(name, args, context)
+      TR-->>TL: status / results / message
+      TL->>TL: 记录 tool_trace，结果以 role=tool 回灌
+    end
+  end
+  TL->>GW: 轮次或超时用尽时，再要一次纯文本回答（不带 tools）
+  TL-->>AG: {ok, answer, tool_trace, rounds}
+  AG-->>U: ChatResponse{answer, tool_trace}
+  Note over AG,U: 循环失败或超时 → 自动回落到链路 B 的规则 DAG
+```
+
+### 链路 E 的降级设计（重要）
+
+| 情况 | 行为 |
+|---|---|
+| `TOOL_CALLING_ENABLED=false` | 直接回落规则 DAG |
+| 模型网关不可达 / 模型报错 | 回落规则 DAG，并记录 reason |
+| 没有可暴露的工具 | 回落规则 DAG |
+| 已达最大轮次或总超时 | 去掉 tools 再要一次文本回答；仍失败则回落 |
+| 上游不认识 tools 参数 | 网关自动去掉 tools 重试一次（`router.py:216` 内） |
+
 ## 3.2 关键调用路径说明
 
 ### 路径 1：POST /chat 的完整决策过程
@@ -518,6 +607,17 @@ sequenceDiagram
 | 7 | `_describe_plan(task)` | `agent_service/main.py:177` | DAG | `str`（多行计划文本，回给用户） |
 
 > **关键语义**：任务型请求立即返回（约 `agent_service/main.py:210`），执行在后台协程中进行；前端通过轮询 `GET /task/{task_id}/status` 获取进度。
+
+### 路径 3：模型自主工具调用（新增的优先路径）
+
+| 步 | 调用 | 位置 | 说明 |
+|---:|---|---|---|
+| 1 | `tool_call_loop.run(message, session_id, user_id)` | 调用点 `agent_service/main.py:261`；实现 `tool_loop.py:102` | 意图为 tool_call / professional_task 时**先走这里** |
+| 2 | `list_exposed_tools()` / `openai_tools()` | `tool_loop.py:89` / `:96` | 只取 ONLINE 且在 `MODEL_EXPOSED_TOOLS` 白名单内的工具 |
+| 3 | `_call_model(messages, tools)` | `tool_loop.py:175` | 经模型网关下发 tools |
+| 4 | `_execute_one(call, ...)` | `tool_loop.py:201` | 解析模型给出的 arguments → `execute_tool` → 记录 trace → 回灌 role=tool 消息 |
+| 5 | `_finalize(...)` | `tool_loop.py:255` | 轮次或超时用尽时去掉 tools 再要一次文本回答 |
+| 6 | 失败回落 | `agent_service/main.py:274` 附近 | 回落到下方的规则规划路径 |
 
 ### 路径 2：_execute_step 的分派规则
 
@@ -596,6 +696,7 @@ sequenceDiagram
 | DELETE | `/rag/documents/{document_id}` | `proxy_rag_delete` | `chat_service/main.py:114` | 路径参数 | `{document_id, deleted_chunks, status}` |
 | GET | `/tasks` | `proxy_tasks` | `chat_service/main.py:124` | — | `{total, tasks[]}` |
 | GET | `/agents` | `proxy_agents` | `chat_service/main.py:132` | — | `{total, agents[]}` |
+| GET | `/tools` | `proxy_tools` | `chat_service/main.py:139` | — | `{total, tool_calling_enabled, exposed_to_model, tools[]}` |
 | GET | `/task/{task_id}/status` | `proxy_task_status` | `chat_service/main.py:140` | 路径参数 | `{task_id, status, progress, result, error, steps[]}` |
 | GET | `/config/schema` | `get_config_schema` | `chat_service/config_api.py:204` | — | `ConfigItemResponse[]` |
 | PUT | `/config/update` | `update_config` | `chat_service/config_api.py:225` | `ConfigUpdateRequest{key, value}` | `{status, ...}` |
@@ -610,6 +711,22 @@ sequenceDiagram
 | GET | `/health` | `health` | 97 | 返回 registered_agents / registered_tools |
 | GET | `/tasks` | `list_tasks` | 109 | 内存任务列表 |
 | GET | `/agents` | `list_agents` | 116 | 已注册 Agent |
+| GET | `/tools` | `list_tool_definitions` | 131 | 全部工具 + 是否已暴露给模型自主调用 |
+
+### chat_service 新增端点（P3）
+
+| 方法 | 路径 | 说明 | 可用条件 |
+|---|---|---|---|
+| POST | `/attachments` | 上传附件并提取正文（50MB 上限） | 始终 |
+| GET | `/attachments/limits` | 附件限制说明（含图片不可解析声明） | 始终 |
+| GET | `/desktop/status` | 桌面模式与工作文件夹状态 | 始终 |
+| GET | `/workspace` | 当前工作文件夹与目录树摘要 | `DESKTOP_MODE=true` |
+| GET | `/workspace/list` | 列出目录（只列一层） | `DESKTOP_MODE=true` |
+| POST | `/workspace/set` | 直接设置工作文件夹路径 | `DESKTOP_MODE=true` |
+| POST | `/workspace/select` | 弹出系统原生文件夹对话框 | `DESKTOP_MODE=true` |
+
+> 桌面模式下 chat_service 还托管 `frontend/dist`（含 SPA 回退），并内置 `/api` 前缀剥离中间件
+> ——Docker 形态下这两件事由 nginx 完成。
 | GET | `/admin/status` | `admin_status` | 123 | 配置状态（⚠️ 无鉴权） |
 | POST | `/admin/reload` | `reload_config` | 135 | 直接 setattr 修改全局 Settings（⚠️ 无鉴权，见第 9 章） |
 | POST | `/chat` | `chat` | 192 | 主编排入口 |
@@ -665,6 +782,49 @@ sequenceDiagram
 | `manifest` | `ToolManifest` | `_validate_tool()`（`tools/base/registry.py:105`）要求 `input_schema` / `output_schema` 非空 |
 | `execute_tool` | `async (self, tool_id, params, context) -> dict` | 仅当工具状态为 `ONLINE` 才执行，否则返回错误 dict |
 
+### 工具调用契约（模型 ↔ 平台）
+
+**① 平台 → 模型**：`ToolManifest` 转成 OpenAI tools 定义（`tool_loop.py:64 manifest_to_openai_tool`）
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "stability",
+    "description": "完整稳性、破舱稳性分析，含横摇周期、复原力臂",
+    "parameters": { "type": "object", "properties": { "B": {"type": "number"}, "T": {"type": "number"} } }
+  }
+}
+```
+
+| 映射关系 | 来源字段 | 说明 |
+|---|---|---|
+| `function.name` | `manifest.tool_id` | 模型用这个名字发起调用 |
+| `function.description` | `manifest.description` | 模型据此判断何时该用 |
+| `function.parameters` | `manifest.input_schema` | **结构同构，零转换** |
+
+**② 模型 → 平台**：`tool_calls` 数组
+
+```json
+{ "id": "call_1", "type": "function", "function": { "name": "stability", "arguments": "{\"B\":15,\"T\":5}" } }
+```
+
+**③ 平台 → 模型**：执行结果以 `role="tool"` 消息回灌
+
+```json
+{ "role": "tool", "tool_call_id": "call_1", "name": "stability", "content": "{\"status\":\"completed\",\"results\":{...}}" }
+```
+
+| 约束 | 取值 | 位置 |
+|---|---|---|
+| 最大轮次 | `TOOL_CALL_MAX_ROUNDS`（默认 6） | `tool_loop.py:102` |
+| 循环总超时 | `TOOL_CALL_TIMEOUT_SECONDS`（默认 120s） | 同上 |
+| 单次工具超时 | `manifest.timeout_ms` | `tools/base/registry.py:75` |
+| 结果回灌上限 | 6000 字符 | `tool_loop.py:201` 内 |
+| 暴露范围 | `MODEL_EXPOSED_TOOLS`（5 个），或 `TOOL_CALL_EXPOSE_UNIMPLEMENTED=true` 全暴露 | `tool_loop.py:55` |
+| 模型给出的参数非法 | 退化为空参数 `{}` 并记日志，不中断循环 | `tool_loop.py:201` |
+| provider 不支持 tools | 网关剥离 tools 后重试一次 | `router.py:181` |
+
 ## 4.4 数据访问接口
 
 | 接口 | 位置 | 语义 | 备注 |
@@ -673,7 +833,9 @@ sequenceDiagram
 | `get_pg_session()` | `database.py:42` | FastAPI 依赖注入；异常时 rollback | 自动 commit |
 | `get_mongo_db()` / `get_redis()` | `database.py:77` / `109` | 取已初始化客户端 | 未初始化时抛 `RuntimeError` |
 | `BaseRepository` 及 3 个实现 | `shared/models/repository/` | 项目 / 任务 / 会话仓储 | ⚠️ 四个服务均未调用，属预留 |
-| Milvus 集合 `grasssea_knowledge` | `ingestion.py:262`、`retrieval.py:300` | 向量存取；字段 `id / document_id / text / embedding / knowledge_base / filename / chunk_index` | 维度由 embedding 后端决定 |
+| **`VectorStore` 抽象** | `shared/vectorstore/base.py` | 向量存取的统一协议：`upsert / search / fetch_all / delete_document / count / close` | 上层（ingestion / retrieval）**只依赖此协议** |
+| `LocalVectorStore`（默认） | `shared/vectorstore/local.py` | SQLite 表 `chunks` + numpy 精确余弦检索 | 零外部依赖；`VECTOR_BACKEND=local` |
+| `MilvusVectorStore` | `shared/vectorstore/milvus.py` | Milvus 集合 `grasssea_knowledge`；字段 `id / document_id / text / embedding / knowledge_base / filename / chunk_index` | `VECTOR_BACKEND=milvus` |
 
 ## 4.5 第三方集成接口
 
@@ -683,6 +845,7 @@ sequenceDiagram
 | OpenAI 兼容 Embeddings | `POST {OPENAI_BASE_URL}/embeddings` | `embedding.py:110` | 失败则回退到下一个后端 |
 | HuggingFace 模型下载 | `fastembed` + `HF_ENDPOINT` | `embedding.py:61-70` | 失败则回退 `hash` 词法向量（`embedding.py:127`） |
 | Milvus | pymilvus ORM 风格 API | `ingestion.py:48`、`retrieval.py:56` | 连接失败仅告警，检索返回空 |
+| **模型网关（内部）** | `POST {MODEL_GATEWAY_URL}/v1/chat/completions` | `tool_loop.py:175` | 支持 `tools` / `tool_calls` 透传；上游拒绝时自动降级 |
 | MinIO | `minio` SDK | `scripts/init_minio.py` | 脚本级 |
 | Brave / Bing 搜索 | 仅登记 Key | `tools/file/web_search.py` 返回 not_implemented | — |
 
@@ -755,6 +918,8 @@ sequenceDiagram
 | 带引用答案生成 + 离线降级 | ✅ | `generator.py:49` |
 | 配置热更新（加密存储 API Key） | ✅ | `chat_service/config_api.py:225` |
 | 任务结果中文摘要 | ✅ | `executor.py:302` |
+| **模型自主调用工具**（function calling） | ✅ | `tool_loop.py:102` + `model_gateway/main.py:75` |
+| 工具调用轨迹展示 | ✅ | `frontend/src/components/ToolTraceCard.tsx` |
 | 待办 / 报告 / 文献 / CAD / OCR | ❌ | 对应 Agent 与工具均为 not_implemented |
 | 用户鉴权 / 多租户 | ❌ | 设计现状：个人使用 |
 
@@ -779,7 +944,9 @@ sequenceDiagram
 | 未实现能力如实返回 | `agents/*/agent.py` | 返回 `not_implemented` + 中文原因，**不返回任何伪造的文件路径、规范条款号、文献条目** |
 | 步骤跳过 ≠ 失败 | `executor.py` `_record_step` | `not_implemented` 归入 skipped |
 | 依赖旁路 | `planner.py:307 _normalize_llm_plan` | 把不可执行步骤从依赖链摘除，防止整单死锁 |
-| 工具可执行白名单 | `planner.py:128` / `planner.py:291` | 仅白名单内的工具/动作会被派发 |
+| 工具可执行白名单 | `planner.py:128` / `planner.py:291` | 仅白名单内的工具/动作会被规则路径派发 |
+| **模型可用工具白名单** | `tool_loop.py:55 MODEL_EXPOSED_TOOLS` | 默认暴露 **8 个**：5 个已实现计算/核查工具 + 3 个工作文件夹工具（后者仅在桌面模式且已选目录时真正执行） |
+| **工具调用总开关** | `config.py:177 TOOL_CALLING_ENABLED` | 关闭后 `/chat` 完全回到规则规划路径 |
 | 上传类型白名单 | `knowledge_service/main.py:253` | `.pdf / .txt / .md / .markdown` |
 | 知识库过滤 | `retrieval.py:94` | `knowledge_bases=None` 时检索全部，否则按 `expr` 过滤 |
 | 稀疏检索窗口上限 | `retrieval.py` `_ensure_sparse_index` | Milvus `limit` 上限 16384，超出报错（已规避） |
@@ -807,6 +974,16 @@ sequenceDiagram
 | | `LOCAL_EMBEDDING_MODEL` / `LOCAL_EMBEDDING_CACHE` / `HF_ENDPOINT` | BAAI/bge-small-zh-v1.5 / 空 / https://hf-mirror.com | 本地向量 |
 | 服务发现 | `MODEL_GATEWAY_URL` / `AGENT_SERVICE_URL` / `KNOWLEDGE_SERVICE_URL` | localhost:8004/8002/8003 | 跨服务调用 |
 | 密钥 | `SECRETS_DIR` | 空 → 自动探测 `docker-data/secrets` | `secrets.py:33` |
+| **桌面模式** | `DESKTOP_MODE` | false | 由 `--desktop` 置 true；开启后启用工作文件夹与原生对话框 |
+| | `WORKSPACE_ROOT` | 空 | 预置工作文件夹（留空则界面选择） |
+| **向量后端** | `VECTOR_BACKEND` | local（代码默认）/ milvus（Docker 默认） | 决定 RAG 底层存储；桌面用 local，服务器用 milvus |
+| | `VECTOR_STORE_PATH` | 空 | 向量库文件路径；空则用 `<DATA_DIR>/vectorstore/knowledge.sqlite3` |
+| | `DATA_DIR` | 空 | 本地数据目录；空则用 `<项目根>/data` |
+| **工具调用** | `TOOL_CALLING_ENABLED` | true | 是否允许模型自主调用工具 |
+| | `TOOL_CALL_MAX_ROUNDS` | 6 | 最多几轮「思考 → 调用 → 回灌」 |
+| | `TOOL_CALL_TIMEOUT_SECONDS` | 120 | 循环总超时 |
+| | `TOOL_CALL_MODEL` | deepseek-chat | 工具调用使用的模型 |
+| | `TOOL_CALL_EXPOSE_UNIMPLEMENTED` | false | 是否把未实现工具也暴露给模型 |
 
 > ⚠️ 安全相关：`is_usable_key()`（`config.py`）会把 `your-xxx` 一类占位符判为不可用；`get_settings()` 会把解密后的密钥写入 `os.environ` 并覆盖占位符。
 
@@ -837,6 +1014,29 @@ sequenceDiagram
 | BM25 稀疏索引 | `retrieval.py` 内存字典 | 进程级 | 懒构建，数据变更后 `_rebuild_sparse_index()` |
 | Embedder 单例 | `get_embedder()`（`embedding.py:199`） | 进程级 | 模型只加载一次 |
 | 前端状态 | `chatStore.ts` / `uiStore.ts`（zustand） | 页面会话 | 无持久化 |
+
+### 向量存储（可插拔）
+
+`shared/vectorstore/` 把「向量存取」与具体后端解耦，上层 RAG 流程完全后端无关：
+
+~~~mermaid
+graph LR
+  ING["knowledge_service/ingestion.py"] --> VS["vectorstore/__init__.py<br/>get_vector_store()"]
+  RET["knowledge_service/retrieval.py"] --> VS
+  VS -->|"VECTOR_BACKEND=local"| L["LocalVectorStore<br/>SQLite + numpy 精确余弦"]
+  VS -->|"VECTOR_BACKEND=milvus"| M["MilvusVectorStore<br/>Milvus 2.4 + COSINE/IVF_FLAT"]
+  L --> F1[("data/vectorstore/knowledge.sqlite3")]
+  M --> F2[("Milvus collection<br/>grasssea_knowledge")]
+~~~
+
+| 后端 | 持久化 | 检索方式 | 依赖 | 适用 |
+|---|---|---|---|---|
+| `local`（默认） | 单个 SQLite 文件，向量以 float32 小端字节串存储 | numpy 暴力余弦，个人规模毫秒级、**精确无近似** | 仅 `sqlite3`(标准库) + `numpy` | 桌面 / 个人使用 |
+| `milvus` | Milvus 集合 | ANN 近似检索（IVF_FLAT） | pymilvus + Milvus 服务 | 服务器 / 大规模 |
+
+**保持不变的部分**：BM25 稀疏索引、`dense×0.7 + sparse×0.3` 融合、重排、生成与降级，全部逻辑一行未改，只把数据来源从 Milvus 换成协议调用。
+
+**维度一致性**：两种后端都会在向量维度与索引不一致时抛出带中文指引的 `RuntimeError`（提示执行 `scripts/reset_knowledge_base.py` 后重新入库）。
 
 ## 8.3 数据库表与代码实体映射
 
@@ -887,6 +1087,7 @@ sequenceDiagram
 | D2 | **文档解析依赖已 import 但逻辑未实现** | `pypdf2` / `pymupdf` / `openpyxl` | 🟡 低 | 属规划中能力，建议在 `pyproject.toml` 加注释说明 |
 | D3 | **无进程内循环依赖** | 脚本抽取全部 import 边未发现环 | ✅ 良好 | 保持 |
 | D4 | **零反向依赖** | `shared/` 不 import 任何业务模块 | ✅ 良好 | 保持 |
+| D5 | **pymilvus ORM 风格 API 已弃用** | 实测告警：`Collection.search` / `connections.disconnect` 标记为将在 PyMilvus 3.1 移除 | 🟡 低 | 仅影响 `VECTOR_BACKEND=milvus`；升级 pymilvus 前需把 `milvus.py` 改用 `MilvusClient`。内置 local 后端不受影响 |
 
 ## 9.3 接口层面
 
@@ -897,14 +1098,15 @@ sequenceDiagram
 | I3 | **`/admin/*` 端点无鉴权** | 4 个服务共 6 个 admin 端点 | 🟠 中 | 个人使用可接受；至少绑定 `127.0.0.1` 或加静态 token |
 | I4 | **`reload_config` 修改全局单例** | `agent_service/main.py:135`、`knowledge_service/main.py:162`、`model_gateway/main.py:139` | 🔴 高 | 改为不可变快照替换（构造新 Settings 后原子换引用） |
 | I5 | **配置双写来源** | `config_api._write_env()` 写文件 + `os.environ` 直接改 | 🟠 中 | 单一来源：文件为唯一权威，重启后重新加载 |
-| I6 | **无分页的列表端点** | `/tasks`、`/agents` | 🟡 低 | 规模可控，暂可接受 |
+| I6 | **无分页的列表端点** | `/tasks`、`/agents`、`/tools` | 🟡 低 | 规模可控，暂可接受 |
+| I7 | **`/admin/reload` 不做类型校验** ｜ 实测：传入 `{"TOOL_CALLING_ENABLED": "false"}` 时，pydantic v2 默认不校验赋值，字段被设成字符串 `"false"`（真值），开关**并未关闭** | `agent_service/main.py:158` 起、`model_gateway/main.py:152` 起 | 🟠 中 | 改为先按字段类型转换（或开启 `validate_assignment`），并对布尔/整数配置做白名单校验。**当前要关闭工具调用请直接改 `.env` 并重启** |
 
 ## 9.4 安全层面
 
 | # | 问题 | 证据 | 等级 | 建议 |
 |---:|---|---|---|---|
 | S1 | **全部端点无鉴权** | 无 JWT/Session/中间件校验 | 🟠 中（设计现状） | 个人局域网使用可接受；**切勿暴露公网** |
-| S2 | **CORS 允许全部来源** | `chat_service/main.py` `allow_origins=["*"]` | 🟠 中 | 收敛为具体来源 |
+| S2 | CORS 已收敛为白名单 ✅ | `chat_service/main.py:42` 为 `allow_origins=["http://localhost:3000", "http://localhost:5173"]` | 🟢 低 | 部署到非本机域名时需同步加入白名单 |
 | S3 | **密钥文件与加密文件同机** | `docker-data/secrets/.grasssea_key` + `.grasssea_secrets` | 🟠 中 | 二者同泄即可解密；建议密钥走环境变量或 KMS |
 | S4 | **`SECRETS_DIR` 未设时回落项目根** | `secrets.py:33` | 🟡 低 | 已有 `docker-data/secrets` 优先探测，可接受 |
 | S5 | **历史泄露口令已轮换** | 见下方「安全基线段」 | ✅ 已处理 | 保持 `.gitignore` 覆盖 `.env` / `.freebuff/` / `.venv/` |
@@ -913,6 +1115,7 @@ sequenceDiagram
 
 | 优先级 | 事项 | 理由 | 预估 |
 |---|---|---|---|
+| **已修复** | 模型网关 §_call_deepseek§ 曾写死 `{"role":"user","content":"ping"}` 占位消息，真实请求消息从未送达模型（`router.py:199`） | 使 `/v1/chat/completions` 成为空壳，且无法支持工具调用 | 已随本次改造修复（`router.py:216` 起透传 messages 与 tools） |
 | **P0** | 保持 `.env` 与密钥文件永不入库；仓库设为 Private 或开启 Secret Scanning | 已发生过一次真实凭据泄露 | 已大部分完成 |
 | **P0** | `reload_config` 并发安全改造（I4） | 现有实现有数据竞争风险 | 0.5 天 |
 | **P1** | 定义 `AgentResult` 强类型契约（I1） | 编排层当前靠字符串约定，易回归 | 1 天 |
@@ -960,6 +1163,10 @@ sequenceDiagram
 | RAG 入库 | `services/knowledge_service/ingestion.py:73` |
 | RAG 检索 | `services/knowledge_service/retrieval.py:94` |
 | RAG 生成与降级 | `services/knowledge_service/generator.py:49,150` |
+| **模型自主工具调用循环** | `services/agent_service/tool_loop.py` |
+| **模型网关工具透传** | `services/model_gateway/router.py:167,216` |
+| **工具轨迹前端展示** | `frontend/src/components/ToolTraceCard.tsx` |
+| **新工具开发教程** | [`TOOL_DEVELOPMENT_GUIDE.md`](./TOOL_DEVELOPMENT_GUIDE.md) |
 | 配置热更新 | `services/chat_service/config_api.py:225` |
 | 前端 API 封装 | `frontend/src/api/index.ts` |
 | 任务拓扑图 | `frontend/src/components/DAGPanel.tsx` |
@@ -975,14 +1182,15 @@ sequenceDiagram
 | 链路 B 任务执行时序图 | 3.1 |
 | 链路 C RAG 检索时序图 | 3.1 |
 | 链路 D 文档入库时序图 | 3.1 |
+| **链路 E 模型自主工具调用时序图** | 3.1 |
 | 类与继承关系 | [附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)（逐文件符号表） |
 
 ## 10.4 分析范围声明与未覆盖内容
 
 **已覆盖**
-- 全部 **123 个代码文件**（107 `.py` + 16 `.ts/.tsx`），逐文件符号见[附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)。
+- 全部 **135 个代码文件**（118 `.py` + 17 `.ts/.tsx`），逐文件符号见[附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)。
 - 构建与配置文件：`pyproject.toml`、`uv.lock`、`alembic.ini`、`Makefile`、`docker-compose.yml`、`docker-compose.app.yml`、`infrastructure/docker/Dockerfile*`、`frontend/vite.config.ts`、`frontend/tsconfig.json`、`.env.example`、`.gitignore`、`.dockerignore`。
-- 27 条 HTTP 路由、115 个类、550 个符号。
+- 43 条 HTTP 路由、121 个类、685 个符号。
 
 **未覆盖（非代码资产，按要求仅登记）**
 | 目录 | 规模 | 说明 |
@@ -1002,6 +1210,6 @@ sequenceDiagram
 5. `review_agent.BULKHEAD_CLEARANCE_MIN_MM = 600.0`（`review_agent/agent.py:63`）阈值的依据 —— 代码注释已自陈为启发式，无规范来源。
 
 **文档维护约定**
-- 本文为**快照式**文档，基线为 2026-10-16 / 分支 `develop` / commit `60d5c293`。
+- 本文为**快照式**文档，基线为 2026-10-16 / 分支 `develop`（新增「模型自主工具调用」能力后已同步更新）。
 - 第 5、6 章（函数与类清单）在[附录索引](./ARCHITECTURE-APPENDIX-INDEX.md)中，**建议每次重构后由脚本重新生成**。
 - 修改代码后请同步更新本文对应章节的行号引用。

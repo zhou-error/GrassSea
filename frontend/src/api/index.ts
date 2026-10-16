@@ -14,8 +14,107 @@ api.interceptors.response.use(
 );
 
 // Chat
-export const chatApi = (message: string, sessionId?: string) =>
-  api.post('/chat', { message, session_id: sessionId });
+
+/** 模型自主调用一次工具的记录 */
+export interface ToolCallTrace {
+  round: number;
+  tool: string;
+  arguments: Record<string, unknown>;
+  status: string;
+  elapsed_ms: number;
+  message?: string | null;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  intent: string;
+  answer: string;
+  task_id?: string | null;
+  sources?: RagSourceChunk[];
+  /** 仅当模型自主调用工具时非空 */
+  tool_trace?: ToolCallTrace[];
+}
+
+/** 附件描述符（由 POST /attachments 返回） */
+export interface AttachmentDescriptor {
+  attachment_id: string;
+  filename: string;
+  media_type: string;
+  size: number;
+  kind: 'text' | 'pdf' | 'table' | 'image' | 'binary';
+  chars: number;
+  text: string;
+  truncated: boolean;
+  note: string;
+}
+
+export interface AttachmentLimits {
+  max_attachment_bytes: number;
+  max_text_chars_per_file: number;
+  image_understood: boolean;
+  note: string;
+}
+
+export const chatApi = (
+  message: string,
+  sessionId?: string,
+  attachments: AttachmentDescriptor[] = []
+) =>
+  api.post<ChatResponse>('/chat', {
+    message,
+    session_id: sessionId,
+    ...(attachments.length > 0 ? { attachments } : {}),
+  });
+
+// ---- 附件上传 ----
+
+export const uploadAttachmentApi = (
+  file: File,
+  onProgress?: UploadProgressHandler
+): Promise<{ data: AttachmentDescriptor }> => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<AttachmentDescriptor>('/attachments', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180000,
+    onUploadProgress: onProgress
+      ? (e) => {
+          const total = typeof e.total === 'number' && e.total > 0 ? e.total : e.loaded;
+          if (!total || total <= 0) return;
+          onProgress(Math.max(0, Math.min(100, Math.round((e.loaded * 100) / total))));
+        }
+      : undefined,
+  });
+};
+
+export const attachmentLimitsApi = () => api.get<AttachmentLimits>('/attachments/limits');
+
+// ---- 桌面模式与工作文件夹 ----
+
+export interface DesktopStatus {
+  desktop_mode: boolean;
+  workspace_selected: boolean;
+  workspace_root: string;
+}
+
+export interface WorkspaceInfo {
+  selected: boolean;
+  root: string;
+  tree: string[];
+  truncated: boolean;
+  cancelled?: boolean;
+}
+
+export const desktopStatusApi = () => api.get<DesktopStatus>('/desktop/status');
+
+export const workspaceInfoApi = () => api.get<WorkspaceInfo>('/workspace');
+
+export const workspaceSetApi = (path: string) =>
+  api.post<WorkspaceInfo>('/workspace/set', { path });
+
+/** 弹出系统原生文件夹对话框（仅桌面模式） */
+export const workspaceSelectApi = () =>
+  api.post<WorkspaceInfo>('/workspace/select', {}, { timeout: 180000 });
 
 // RAG
 export interface RagDocumentSource {
@@ -166,5 +265,28 @@ export const getTaskStatusApi = (taskId: string) =>
   api.get<TaskStatusResponse>(`/task/${encodeURIComponent(taskId)}/status`);
 
 export const listAgentsApi = () => api.get<AgentListResponse>('/agents');
+
+// Tools —— 供模型自主调用的工具清单
+export interface ToolDefinition {
+  tool_id: string;
+  name: string;
+  description: string;
+  category: string;
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
+  timeout_ms: number;
+  version: string;
+  /** 是否已暴露给模型自主调用 */
+  exposed_to_model: boolean;
+}
+
+export interface ToolListResponse {
+  total: number;
+  tool_calling_enabled: boolean;
+  exposed_to_model: number;
+  tools: ToolDefinition[];
+}
+
+export const listToolsApi = () => api.get<ToolListResponse>('/tools');
 
 export default api;

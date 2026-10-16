@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    key: '/tasks',
+    key: '/task-center',
     label: '智能体',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">

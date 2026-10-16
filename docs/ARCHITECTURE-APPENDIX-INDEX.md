@@ -1,16 +1,19 @@
 # 附录 · 全文件与符号索引
 
 > 本文件由脚本从源码**机械生成**，用于保证「不遗漏任何源文件」；正文见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
+> 工具开发见 [`TOOL_DEVELOPMENT_GUIDE.md`](./TOOL_DEVELOPMENT_GUIDE.md)，桌面版见 [`DESKTOP_GUIDE.md`](./DESKTOP_GUIDE.md)。
 
 | 项 | 值 |
 |---|---|
-| 生成时间 | 2026-10-16 05:25:08 |
-| 代码文件数 | 123 |
-| 代码总行数 | 11356 |
-| 提取符号数（含多行签名） | 550 |
-| 登记文件总数（含配置/文档） | 163 |
+| 生成时间 | 2026-10-16 16:20:37 |
+| 代码文件数 | 135 |
+| 代码总行数 | 14370 |
+| 类数量 | 121 |
+| 提取符号数（含多行签名） | 685 |
+| HTTP 路由装饰器 | 43 |
+| 登记文件总数 | 179 |
 
-**范围声明**：已排除 `node_modules`、`.venv`、`docker-data`、`.git`、`.freebuff`、`dist`、`__pycache__`、`.uv-cache`；
+**范围声明**：已排除 `node_modules`、`.venv`、`docker-data`、`data`、`.git`、`.freebuff`、`dist`、`__pycache__`、`.uv-cache`；
 `教学文件/`、`ProductDesign/`、`AI开发提示词/`、`项目开发日记/` 为非代码资产，见正文第 10 章。
 ⚠️ 本文件随代码变动，建议每次重构后重新生成。
 
@@ -34,115 +37,127 @@
 | 12 | `agents/research_agent/agent.py` | 57 | 1 | 5 | 研究员 Agent (Research Agent) — 文献检索、信息提炼、每日简报生成 |
 | 13 | `agents/review_agent/__init__.py` | 2 | 0 | 0 | — |
 | 14 | `agents/review_agent/agent.py` | 157 | 1 | 4 | 审查 Agent (Review Agent) |
-| 15 | `frontend/src/App.tsx` | 39 | 0 | 1 | — |
-| 16 | `frontend/src/api/index.ts` | 171 | 0 | 24 | — |
-| 17 | `frontend/src/components/DAGPanel.tsx` | 364 | 0 | 1 | — |
-| 18 | `frontend/src/components/ShimmerBar.tsx` | 21 | 0 | 1 | — |
-| 19 | `frontend/src/components/Sidebar.tsx` | 144 | 0 | 1 | — |
-| 20 | `frontend/src/components/TopNav.tsx` | 67 | 0 | 1 | — |
-| 21 | `frontend/src/components/stepOutput.tsx` | 121 | 0 | 5 | — |
-| 22 | `frontend/src/main.tsx` | 36 | 0 | 0 | — |
-| 23 | `frontend/src/pages/Chat.tsx` | 329 | 0 | 2 | — |
-| 24 | `frontend/src/pages/KnowledgeBase.tsx` | 530 | 0 | 1 | — |
-| 25 | `frontend/src/pages/Settings.tsx` | 176 | 0 | 1 | — |
-| 26 | `frontend/src/pages/TaskCenter.tsx` | 508 | 0 | 1 | — |
-| 27 | `frontend/src/stores/chatStore.ts` | 38 | 0 | 1 | — |
-| 28 | `frontend/src/stores/uiStore.ts` | 16 | 0 | 1 | — |
-| 29 | `frontend/vite.config.d.ts` | 3 | 0 | 0 | — |
-| 30 | `frontend/vite.config.ts` | 19 | 0 | 0 | — |
-| 31 | `scripts/backup_db.py` | 117 | 0 | 5 | 数据库备份脚本 — 每日全量 + WAL 归档 |
-| 32 | `scripts/init_db.py` | 73 | 0 | 3 | 数据库一键建表脚本（个人开发环境） |
-| 33 | `scripts/init_minio.py` | 90 | 0 | 2 | MinIO bucket 初始化脚本 |
-| 34 | `scripts/reset_knowledge_base.py` | 46 | 0 | 1 | 重建 Milvus 知识库集合 |
-| 35 | `scripts/seed_data.py` | 96 | 0 | 3 | 数据库种子脚本（幂等，可重复执行） |
-| 36 | `services/agent_service/__init__.py` | 2 | 0 | 0 | — |
-| 37 | `services/agent_service/executor.py` | 537 | 1 | 15 | 任务执行引擎 |
-| 38 | `services/agent_service/fsm.py` | 143 | 2 | 7 | 会话状态机 (Session FSM) |
-| 39 | `services/agent_service/intent.py` | 213 | 3 | 6 | 意图识别模块 |
-| 40 | `services/agent_service/main.py` | 313 | 3 | 12 | 智能体编排服务 (Agent Orchestration Service) |
-| 41 | `services/agent_service/planner.py` | 402 | 3 | 12 | 任务规划模块 |
-| 42 | `services/agent_service/registry.py` | 131 | 1 | 13 | 智能体注册中心 |
-| 43 | `services/chat_service/__init__.py` | 2 | 0 | 0 | — |
-| 44 | `services/chat_service/config_api.py` | 303 | 2 | 8 | 系统配置管理 API — 允许用户在 Web 中修改关键配置 |
-| 45 | `services/chat_service/main.py` | 145 | 0 | 10 | 对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。 |
-| 46 | `services/knowledge_service/__init__.py` | 2 | 0 | 0 | — |
-| 47 | `services/knowledge_service/generator.py` | 171 | 1 | 7 | 答案生成模块 |
-| 48 | `services/knowledge_service/ingestion.py` | 336 | 2 | 12 | 文档预处理流水线 |
-| 49 | `services/knowledge_service/main.py` | 332 | 7 | 9 | 知识库服务 (Knowledge Service) |
-| 50 | `services/knowledge_service/reranker.py` | 115 | 1 | 5 | 重排序模块 |
-| 51 | `services/knowledge_service/retrieval.py` | 429 | 2 | 15 | 混合检索模块 |
-| 52 | `services/model_gateway/__init__.py` | 2 | 0 | 0 | — |
-| 53 | `services/model_gateway/main.py` | 334 | 5 | 8 | 模型网关服务 (Model Gateway) |
-| 54 | `services/model_gateway/router.py` | 304 | 3 | 10 | 模型路由器 |
-| 55 | `services/model_gateway/token_tracker.py` | 81 | 1 | 4 | Token 用量统计与计费 |
-| 56 | `shared/__init__.py` | 1 | 0 | 0 | — |
-| 57 | `shared/middleware/__init__.py` | 2 | 0 | 0 | — |
-| 58 | `shared/middleware/observability.py` | 72 | 1 | 2 | 可观测性中间件 — OpenTelemetry 自动埋点 + Prometheus 指标 |
-| 59 | `shared/middleware/security.py` | 114 | 2 | 7 | 安全中间件 — RBAC + API Key + 预签名 URL + 审计日志 |
-| 60 | `shared/models/__init__.py` | 1 | 0 | 0 | — |
-| 61 | `shared/models/alembic/env.py` | 80 | 0 | 4 | Alembic 环境配置 |
-| 62 | `shared/models/alembic/versions/__init__.py` | 2 | 0 | 0 | — |
-| 63 | `shared/models/database.py` | 134 | 1 | 9 | 数据库连接管理模块 |
-| 64 | `shared/models/mongodb/__init__.py` | 2 | 0 | 0 | — |
-| 65 | `shared/models/mongodb/collections.py` | 130 | 1 | 0 | MongoDB 集合定义与索引 |
-| 66 | `shared/models/postgres/__init__.py` | 23 | 0 | 0 | — |
-| 67 | `shared/models/postgres/base.py` | 30 | 2 | 0 | SQLAlchemy 基类与共享 mixin |
-| 68 | `shared/models/postgres/offset_table.py` | 42 | 1 | 1 | 型值表模型 |
-| 69 | `shared/models/postgres/project.py` | 55 | 2 | 1 | 项目模型 |
-| 70 | `shared/models/postgres/prompt_template.py` | 40 | 1 | 1 | Prompt 模板模型 |
-| 71 | `shared/models/postgres/system_config.py` | 27 | 1 | 1 | 系统配置模型 |
-| 72 | `shared/models/postgres/task.py` | 64 | 3 | 1 | 任务记录模型 |
-| 73 | `shared/models/postgres/todo.py` | 64 | 3 | 1 | 待办事项模型 |
-| 74 | `shared/models/postgres/user.py` | 34 | 1 | 1 | 用户模型 |
-| 75 | `shared/models/repository/__init__.py` | 14 | 0 | 0 | — |
-| 76 | `shared/models/repository/base.py` | 79 | 1 | 8 | Repository 基类 |
-| 77 | `shared/models/repository/conversation.py` | 109 | 1 | 9 | Conversation Repository (MongoDB) |
-| 78 | `shared/models/repository/project.py` | 57 | 1 | 4 | Project Repository |
-| 79 | `shared/models/repository/task.py` | 73 | 1 | 5 | Task Repository |
-| 80 | `shared/models/timescale/__init__.py` | 15 | 0 | 0 | — |
-| 81 | `shared/models/timescale/metrics.py` | 100 | 4 | 4 | TimescaleDB 时序指标模型 |
-| 82 | `shared/protocols/__init__.py` | 2 | 0 | 0 | — |
-| 83 | `shared/protocols/agent.py` | 117 | 6 | 11 | 智能体基础协议定义 |
-| 84 | `shared/protocols/tool.py` | 115 | 5 | 12 | 工具基础协议定义 |
-| 85 | `shared/utils/__init__.py` | 1 | 0 | 0 | — |
-| 86 | `shared/utils/config.py` | 206 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
-| 87 | `shared/utils/embedding.py` | 219 | 4 | 14 | 统一的文本向量化模块 |
-| 88 | `shared/utils/logging.py` | 114 | 0 | 6 | GrassSea AI — 结构化日志模块 |
-| 89 | `shared/utils/secrets.py` | 155 | 0 | 7 | API Key 加密存储模块 |
-| 90 | `tests/__init__.py` | 2 | 0 | 0 | — |
-| 91 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
-| 92 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
-| 93 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
-| 94 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
-| 95 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
-| 96 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
-| 97 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
-| 98 | `tools/__init__.py` | 2 | 0 | 0 | — |
-| 99 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
-| 100 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
-| 101 | `tools/bootstrap.py` | 78 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
-| 102 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
-| 103 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
-| 104 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
-| 105 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
-| 106 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
-| 107 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
-| 108 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
-| 109 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
-| 110 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
-| 111 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
-| 112 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
-| 113 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
-| 114 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
-| 115 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
-| 116 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
-| 117 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
-| 118 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
-| 119 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
-| 120 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
-| 121 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
-| 122 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
-| 123 | `练习/test_async.py` | 55 | 0 | 5 | — |
+| 15 | `app/__init__.py` | 9 | 0 | 0 | GrassSea 应用入口包 |
+| 16 | `app/desktop.py` | 211 | 0 | 8 | GrassSea 桌面窗口 |
+| 17 | `app/launcher.py` | 267 | 0 | 8 | GrassSea 单进程启动器 |
+| 18 | `frontend/src/App.tsx` | 39 | 0 | 1 | — |
+| 19 | `frontend/src/api/index.ts` | 293 | 0 | 39 | — |
+| 20 | `frontend/src/components/DAGPanel.tsx` | 364 | 0 | 1 | — |
+| 21 | `frontend/src/components/ShimmerBar.tsx` | 21 | 0 | 1 | — |
+| 22 | `frontend/src/components/Sidebar.tsx` | 144 | 0 | 1 | — |
+| 23 | `frontend/src/components/ToolTraceCard.tsx` | 104 | 0 | 1 | — |
+| 24 | `frontend/src/components/TopNav.tsx` | 67 | 0 | 1 | — |
+| 25 | `frontend/src/components/stepOutput.tsx` | 121 | 0 | 5 | — |
+| 26 | `frontend/src/main.tsx` | 36 | 0 | 0 | — |
+| 27 | `frontend/src/pages/Chat.tsx` | 539 | 0 | 2 | — |
+| 28 | `frontend/src/pages/KnowledgeBase.tsx` | 530 | 0 | 1 | — |
+| 29 | `frontend/src/pages/Settings.tsx` | 176 | 0 | 1 | — |
+| 30 | `frontend/src/pages/TaskCenter.tsx` | 508 | 0 | 1 | — |
+| 31 | `frontend/src/stores/chatStore.ts` | 46 | 0 | 1 | — |
+| 32 | `frontend/src/stores/uiStore.ts` | 16 | 0 | 1 | — |
+| 33 | `frontend/vite.config.d.ts` | 3 | 0 | 0 | — |
+| 34 | `frontend/vite.config.ts` | 19 | 0 | 0 | — |
+| 35 | `scripts/backup_db.py` | 117 | 0 | 5 | 数据库备份脚本 — 每日全量 + WAL 归档 |
+| 36 | `scripts/init_db.py` | 73 | 0 | 3 | 数据库一键建表脚本（个人开发环境） |
+| 37 | `scripts/init_minio.py` | 90 | 0 | 2 | MinIO bucket 初始化脚本 |
+| 38 | `scripts/reset_knowledge_base.py` | 76 | 0 | 3 | 重建知识库索引 |
+| 39 | `scripts/seed_data.py` | 96 | 0 | 3 | 数据库种子脚本（幂等，可重复执行） |
+| 40 | `services/agent_service/__init__.py` | 2 | 0 | 0 | — |
+| 41 | `services/agent_service/executor.py` | 537 | 1 | 15 | 任务执行引擎 |
+| 42 | `services/agent_service/fsm.py` | 143 | 2 | 7 | 会话状态机 (Session FSM) |
+| 43 | `services/agent_service/intent.py` | 213 | 3 | 6 | 意图识别模块 |
+| 44 | `services/agent_service/main.py` | 461 | 3 | 15 | 智能体编排服务 (Agent Orchestration Service) |
+| 45 | `services/agent_service/planner.py` | 402 | 3 | 12 | 任务规划模块 |
+| 46 | `services/agent_service/registry.py` | 131 | 1 | 13 | 智能体注册中心 |
+| 47 | `services/agent_service/tool_loop.py` | 285 | 1 | 9 | 模型自主工具调用循环（OpenAI function calling） |
+| 48 | `services/chat_service/__init__.py` | 2 | 0 | 0 | — |
+| 49 | `services/chat_service/attachments.py` | 266 | 1 | 10 | 附件处理：接收上传文件 → 提取正文 → 生成描述符 |
+| 50 | `services/chat_service/config_api.py` | 303 | 2 | 8 | 系统配置管理 API — 允许用户在 Web 中修改关键配置 |
+| 51 | `services/chat_service/main.py` | 350 | 0 | 22 | 对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。 |
+| 52 | `services/knowledge_service/__init__.py` | 2 | 0 | 0 | — |
+| 53 | `services/knowledge_service/generator.py` | 171 | 1 | 7 | 答案生成模块 |
+| 54 | `services/knowledge_service/ingestion.py` | 262 | 2 | 11 | 文档预处理流水线 |
+| 55 | `services/knowledge_service/main.py` | 332 | 7 | 9 | 知识库服务 (Knowledge Service) |
+| 56 | `services/knowledge_service/reranker.py` | 115 | 1 | 5 | 重排序模块 |
+| 57 | `services/knowledge_service/retrieval.py` | 334 | 2 | 14 | 混合检索模块 |
+| 58 | `services/model_gateway/__init__.py` | 2 | 0 | 0 | — |
+| 59 | `services/model_gateway/main.py` | 362 | 5 | 8 | 模型网关服务 (Model Gateway) |
+| 60 | `services/model_gateway/router.py` | 409 | 3 | 11 | 模型路由器 |
+| 61 | `services/model_gateway/token_tracker.py` | 81 | 1 | 4 | Token 用量统计与计费 |
+| 62 | `shared/__init__.py` | 1 | 0 | 0 | — |
+| 63 | `shared/middleware/__init__.py` | 2 | 0 | 0 | — |
+| 64 | `shared/middleware/observability.py` | 72 | 1 | 2 | 可观测性中间件 — OpenTelemetry 自动埋点 + Prometheus 指标 |
+| 65 | `shared/middleware/security.py` | 114 | 2 | 7 | 安全中间件 — RBAC + API Key + 预签名 URL + 审计日志 |
+| 66 | `shared/models/__init__.py` | 1 | 0 | 0 | — |
+| 67 | `shared/models/alembic/env.py` | 80 | 0 | 4 | Alembic 环境配置 |
+| 68 | `shared/models/alembic/versions/__init__.py` | 2 | 0 | 0 | — |
+| 69 | `shared/models/database.py` | 185 | 1 | 13 | 数据库连接管理模块（全部惰性化） |
+| 70 | `shared/models/mongodb/__init__.py` | 2 | 0 | 0 | — |
+| 71 | `shared/models/mongodb/collections.py` | 130 | 1 | 0 | MongoDB 集合定义与索引 |
+| 72 | `shared/models/postgres/__init__.py` | 23 | 0 | 0 | — |
+| 73 | `shared/models/postgres/base.py` | 30 | 2 | 0 | SQLAlchemy 基类与共享 mixin |
+| 74 | `shared/models/postgres/offset_table.py` | 42 | 1 | 1 | 型值表模型 |
+| 75 | `shared/models/postgres/project.py` | 55 | 2 | 1 | 项目模型 |
+| 76 | `shared/models/postgres/prompt_template.py` | 40 | 1 | 1 | Prompt 模板模型 |
+| 77 | `shared/models/postgres/system_config.py` | 27 | 1 | 1 | 系统配置模型 |
+| 78 | `shared/models/postgres/task.py` | 64 | 3 | 1 | 任务记录模型 |
+| 79 | `shared/models/postgres/todo.py` | 64 | 3 | 1 | 待办事项模型 |
+| 80 | `shared/models/postgres/user.py` | 34 | 1 | 1 | 用户模型 |
+| 81 | `shared/models/repository/__init__.py` | 14 | 0 | 0 | — |
+| 82 | `shared/models/repository/base.py` | 79 | 1 | 8 | Repository 基类 |
+| 83 | `shared/models/repository/conversation.py` | 109 | 1 | 9 | Conversation Repository (MongoDB) |
+| 84 | `shared/models/repository/project.py` | 57 | 1 | 4 | Project Repository |
+| 85 | `shared/models/repository/task.py` | 73 | 1 | 5 | Task Repository |
+| 86 | `shared/models/timescale/__init__.py` | 15 | 0 | 0 | — |
+| 87 | `shared/models/timescale/metrics.py` | 100 | 4 | 4 | TimescaleDB 时序指标模型 |
+| 88 | `shared/protocols/__init__.py` | 2 | 0 | 0 | — |
+| 89 | `shared/protocols/agent.py` | 117 | 6 | 11 | 智能体基础协议定义 |
+| 90 | `shared/protocols/tool.py` | 115 | 5 | 12 | 工具基础协议定义 |
+| 91 | `shared/utils/__init__.py` | 1 | 0 | 0 | — |
+| 92 | `shared/utils/config.py` | 235 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
+| 93 | `shared/utils/embedding.py` | 219 | 4 | 14 | 统一的文本向量化模块 |
+| 94 | `shared/utils/logging.py` | 114 | 0 | 6 | GrassSea AI — 结构化日志模块 |
+| 95 | `shared/utils/secrets.py` | 155 | 0 | 7 | API Key 加密存储模块 |
+| 96 | `shared/utils/workspace.py` | 258 | 1 | 11 | 工作文件夹访问（桌面模式） |
+| 97 | `shared/vectorstore/__init__.py` | 40 | 0 | 1 | 向量存储抽象层 —— 按配置选择后端 |
+| 98 | `shared/vectorstore/base.py` | 99 | 2 | 9 | 向量存储协议与数据结构 |
+| 99 | `shared/vectorstore/local.py` | 268 | 1 | 13 | 内置向量存储 —— SQLite 持久化 + numpy 精确余弦检索 |
+| 100 | `shared/vectorstore/milvus.py` | 240 | 1 | 10 | Milvus 向量存储后端 |
+| 101 | `tests/__init__.py` | 2 | 0 | 0 | — |
+| 102 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
+| 103 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
+| 104 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
+| 105 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
+| 106 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
+| 107 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
+| 108 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
+| 109 | `tools/__init__.py` | 2 | 0 | 0 | — |
+| 110 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
+| 111 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
+| 112 | `tools/bootstrap.py` | 82 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
+| 113 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
+| 114 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
+| 115 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
+| 116 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
+| 117 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
+| 118 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
+| 119 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
+| 120 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
+| 121 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
+| 122 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
+| 123 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
+| 124 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
+| 125 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
+| 126 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
+| 127 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
+| 128 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
+| 129 | `tools/file/workspace.py` | 196 | 4 | 9 | 工作文件夹工具 — 让模型按需读写用户选定文件夹中的文件 |
+| 130 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
+| 131 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
+| 132 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
+| 133 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
+| 134 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
+| 135 | `练习/test_async.py` | 55 | 0 | 5 | — |
 
 ---
 
@@ -292,6 +307,48 @@
 | 82 | method | `ReviewAgent._regulation_check` | `(self, task: dict, context: dict, callbacks: AgentCallbacks) → dict` |
 | 134 | method | `ReviewAgent._generate_report` | `(self, task: dict, context: dict, callbacks: AgentCallbacks) → dict` |
 
+### `app/__init__.py`
+
+- **行数**：9　**类**：0　**函数/方法**：0
+- **职责**：GrassSea 应用入口包
+- **内部依赖**：（无）
+
+（无类 / 函数定义）
+
+### `app/desktop.py`
+
+- **行数**：211　**类**：0　**函数/方法**：8
+- **职责**：GrassSea 桌面窗口
+- **内部依赖**：`app`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 39 | function | `find_browser` | `() → str \| None` |
+| 51 | function | `wait_for_backend` | `(url: str, timeout: float = 60.0) → bool` |
+| 64 | function | `launch_browser_app` | `(url: str, profile_dir: Path, width: int = 1440, height: int = 920) → subprocess.Popen \| None` |
+| 91 | function | `try_pywebview` | `(url: str, title: str, width: int, height: int) → bool` |
+| 104 | function | `open_in_browser` | `(url: str) → None` |
+| 111 | function | `run` | `(url: str, title: str = "白草沧智 GrassSea AI", width: int = 1440, height: int = 920, prefer: str = "auto",) → str` |
+| 137 | function | `_profile_in_use` | `(profile_dir: Path) → bool` |
+| 157 | function | `main` | `(argv: list[str] \| None = None) → int` |
+
+### `app/launcher.py`
+
+- **行数**：267　**类**：0　**函数/方法**：8
+- **职责**：GrassSea 单进程启动器
+- **内部依赖**：`app.desktop`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 61 | function | `resolve_port` | `(env_key: str, default: int) → int` |
+| 73 | function | `prepare_environment` | `() → dict[str, Any]` |
+| 102 | function | `import_apps` | `() → list[tuple[str, Any, int]]` |
+| 112 | function | `serve` | `(name: str, app: Any, port: int, servers: dict[str, Any], primary: bool, verbose: bool = False,) → None` |
+| 138 | function | `run` | `(verbose: bool = False) → int` |
+| 173 | function | `_request_stop` | `(*_: Any) → None` |
+| 201 | function | `check` | `() → int` |
+| 228 | function | `main` | `(argv: list[str] \| None = None) → int` |
+
 ### `frontend/src/App.tsx`
 
 - **行数**：39　**类**：0　**函数/方法**：1
@@ -303,35 +360,50 @@
 
 ### `frontend/src/api/index.ts`
 
-- **行数**：171　**类**：0　**函数/方法**：24
+- **行数**：293　**类**：0　**函数/方法**：39
 - **内部依赖**：（无）
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 17 | const | `chatApi` | `` |
-| 21 | interface | `RagDocumentSource` | `` |
-| 25 | interface | `RagDocument` | `` |
-| 33 | interface | `RagDocumentListResponse` | `` |
-| 38 | interface | `RagUploadResponse` | `` |
-| 45 | interface | `RagDeleteResponse` | `` |
-| 51 | interface | `RagSourceChunk` | `` |
-| 59 | interface | `RagQueryResponse` | `` |
-| 67 | const | `ragQueryApi` | `` |
-| 74 | const | `listDocumentsApi` | `` |
-| 79 | const | `deleteDocumentApi` | `` |
-| 83 | type | `UploadProgressHandler` | `` |
-| 85 | const | `uploadDocumentApi` | `` |
-| 102 | type | `TaskStatus` | `` |
-| 104 | interface | `TaskSummary` | `` |
-| 115 | interface | `TaskListResponse` | `` |
-| 120 | interface | `TaskStep` | `` |
-| 129 | interface | `TaskResult` | `` |
-| 139 | interface | `TaskStatusResponse` | `` |
-| 148 | interface | `AgentInfo` | `` |
-| 158 | interface | `AgentListResponse` | `` |
-| 163 | const | `listTasksApi` | `` |
-| 165 | const | `getTaskStatusApi` | `` |
-| 168 | const | `listAgentsApi` | `` |
+| 19 | interface | `ToolCallTrace` | `` |
+| 28 | interface | `ChatResponse` | `` |
+| 39 | interface | `AttachmentDescriptor` | `` |
+| 51 | interface | `AttachmentLimits` | `` |
+| 58 | const | `chatApi` | `` |
+| 71 | const | `uploadAttachmentApi` | `` |
+| 90 | const | `attachmentLimitsApi` | `` |
+| 94 | interface | `DesktopStatus` | `` |
+| 100 | interface | `WorkspaceInfo` | `` |
+| 108 | const | `desktopStatusApi` | `` |
+| 110 | const | `workspaceInfoApi` | `` |
+| 112 | const | `workspaceSetApi` | `` |
+| 116 | const | `workspaceSelectApi` | `` |
+| 120 | interface | `RagDocumentSource` | `` |
+| 124 | interface | `RagDocument` | `` |
+| 132 | interface | `RagDocumentListResponse` | `` |
+| 137 | interface | `RagUploadResponse` | `` |
+| 144 | interface | `RagDeleteResponse` | `` |
+| 150 | interface | `RagSourceChunk` | `` |
+| 158 | interface | `RagQueryResponse` | `` |
+| 166 | const | `ragQueryApi` | `` |
+| 173 | const | `listDocumentsApi` | `` |
+| 178 | const | `deleteDocumentApi` | `` |
+| 182 | type | `UploadProgressHandler` | `` |
+| 184 | const | `uploadDocumentApi` | `` |
+| 201 | type | `TaskStatus` | `` |
+| 203 | interface | `TaskSummary` | `` |
+| 214 | interface | `TaskListResponse` | `` |
+| 219 | interface | `TaskStep` | `` |
+| 228 | interface | `TaskResult` | `` |
+| 238 | interface | `TaskStatusResponse` | `` |
+| 247 | interface | `AgentInfo` | `` |
+| 257 | interface | `AgentListResponse` | `` |
+| 262 | const | `listTasksApi` | `` |
+| 264 | const | `getTaskStatusApi` | `` |
+| 267 | const | `listAgentsApi` | `` |
+| 270 | interface | `ToolDefinition` | `` |
+| 283 | interface | `ToolListResponse` | `` |
+| 290 | const | `listToolsApi` | `` |
 
 ### `frontend/src/components/DAGPanel.tsx`
 
@@ -359,6 +431,15 @@
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
 | 45 | component | `Sidebar` | `` |
+
+### `frontend/src/components/ToolTraceCard.tsx`
+
+- **行数**：104　**类**：0　**函数/方法**：1
+- **内部依赖**：`../api`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 30 | component | `ToolTraceCard` | `` |
 
 ### `frontend/src/components/TopNav.tsx`
 
@@ -391,13 +472,13 @@
 
 ### `frontend/src/pages/Chat.tsx`
 
-- **行数**：329　**类**：0　**函数/方法**：2
-- **内部依赖**：`../api`、`../components/DAGPanel`、`../components/stepOutput`、`../stores/chatStore`
+- **行数**：539　**类**：0　**函数/方法**：2
+- **内部依赖**：`../api`、`../components/DAGPanel`、`../components/ToolTraceCard`、`../components/stepOutput`、`../stores/chatStore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 16 | component | `CapsuleTag` | `` |
-| 39 | component | `ChatPage` | `` |
+| 25 | component | `CapsuleTag` | `` |
+| 48 | component | `ChatPage` | `` |
 
 ### `frontend/src/pages/KnowledgeBase.tsx`
 
@@ -428,12 +509,12 @@
 
 ### `frontend/src/stores/chatStore.ts`
 
-- **行数**：38　**类**：0　**函数/方法**：1
-- **内部依赖**：（无）
+- **行数**：46　**类**：0　**函数/方法**：1
+- **内部依赖**：`../api`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 23 | const | `useChatStore` | `` |
+| 27 | const | `useChatStore` | `` |
 
 ### `frontend/src/stores/uiStore.ts`
 
@@ -497,13 +578,15 @@
 
 ### `scripts/reset_knowledge_base.py`
 
-- **行数**：46　**类**：0　**函数/方法**：1
-- **职责**：重建 Milvus 知识库集合
-- **内部依赖**：`shared.utils.config`
+- **行数**：76　**类**：0　**函数/方法**：3
+- **职责**：重建知识库索引
+- **内部依赖**：`shared.utils.config`、`shared.vectorstore`、`shared.vectorstore.local`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 28 | function | `main` | `() → None` |
+| 29 | function | `reset_local` | `(db_path: Path) → None` |
+| 43 | function | `reset_milvus` | `(host: str, port: int) → None` |
+| 59 | function | `main` | `() → None` |
 
 ### `scripts/seed_data.py`
 
@@ -587,27 +670,30 @@
 
 ### `services/agent_service/main.py`
 
-- **行数**：313　**类**：3　**函数/方法**：12
+- **行数**：461　**类**：3　**函数/方法**：15
 - **职责**：智能体编排服务 (Agent Orchestration Service)
-- **内部依赖**：`services.agent_service.executor`、`services.agent_service.fsm`、`services.agent_service.intent`、`services.agent_service.planner`、`services.agent_service.registry`、`shared.utils.config`、`shared.utils.logging`、`tools.base.registry`、`tools.bootstrap`
+- **内部依赖**：`services.agent_service.executor`、`services.agent_service.fsm`、`services.agent_service.intent`、`services.agent_service.planner`、`services.agent_service.registry`、`services.agent_service.tool_loop`、`services.chat_service.attachments`、`shared.utils.config`、`shared.utils.logging`、`tools.base.registry`、`tools.bootstrap`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 41 | function | `lifespan` | `(app: FastAPI)` |
-| 70 | class | `ChatRequest` | `(BaseModel)` |
-| 77 | class | `ChatResponse` | `(BaseModel)` |
-| 85 | class | `TaskStatusResponse` | `(BaseModel)` |
-| 97 | function | `health` | `()` |
-| 109 | function | `list_tasks` | `()` |
-| 116 | function | `list_agents` | `()` |
-| 123 | function | `admin_status` | `()` |
-| 135 | function | `reload_config` | `(config: dict[str, str])` |
-| 177 | function | `_describe_plan` | `(task: dict) → str` |
-| 192 | function | `chat` | `(request: ChatRequest)` |
-| 252 | function | `get_task_status` | `(task_id: str)` |
-| 261 | function | `websocket_endpoint` | `(websocket: WebSocket, session_id: str)` |
-| 282 | function | `_handle_chitchat` | `(message: str) → str` |
-| 298 | function | `_handle_knowledge_query` | `(message: str, session_id: str) → dict` |
+| 44 | function | `lifespan` | `(app: FastAPI)` |
+| 78 | class | `ChatRequest` | `(BaseModel)` |
+| 87 | class | `ChatResponse` | `(BaseModel)` |
+| 97 | class | `TaskStatusResponse` | `(BaseModel)` |
+| 109 | function | `health` | `()` |
+| 121 | function | `list_tasks` | `()` |
+| 128 | function | `list_agents` | `()` |
+| 135 | function | `list_tool_definitions` | `()` |
+| 171 | function | `admin_status` | `()` |
+| 183 | function | `reload_config` | `(config: dict[str, str])` |
+| 225 | function | `_describe_plan` | `(task: dict) → str` |
+| 239 | function | `_merge_notes` | `(answer: str, notes: list[str]) → str` |
+| 248 | function | `chat` | `(request: ChatRequest)` |
+| 366 | function | `get_task_status` | `(task_id: str)` |
+| 375 | function | `websocket_endpoint` | `(websocket: WebSocket, session_id: str)` |
+| 396 | function | `_handle_chitchat` | `(message: str) → str` |
+| 412 | function | `_handle_with_attachments` | `(message: str) → str` |
+| 446 | function | `_handle_knowledge_query` | `(message: str, session_id: str) → dict` |
 
 ### `services/agent_service/planner.py`
 
@@ -656,12 +742,51 @@
 | 108 | method | `AgentRegistry.list_agents` | `(self) → list[dict]` |
 | 123 | method | `AgentRegistry.check_health` | `(self) → None` |
 
+### `services/agent_service/tool_loop.py`
+
+- **行数**：285　**类**：1　**函数/方法**：9
+- **职责**：模型自主工具调用循环（OpenAI function calling）
+- **内部依赖**：`shared.protocols.tool`、`shared.utils.config`、`shared.utils.logging`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 68 | function | `manifest_to_openai_tool` | `(manifest: ToolManifest) → dict` |
+| 84 | class | `ToolCallLoop` | `` |
+| 87 | method | `ToolCallLoop.__init__` | `(self, settings: Settings, tool_registry: Any) → None` |
+| 93 | method | `ToolCallLoop.list_exposed_tools` | `(self) → list[ToolManifest]` |
+| 100 | method | `ToolCallLoop.openai_tools` | `(self) → list[dict]` |
+| 106 | method | `ToolCallLoop.run` | `(self, message: str, session_id: str, user_id: str \| None = None,) → dict` |
+| 179 | method | `ToolCallLoop._call_model` | `(self, client: httpx.AsyncClient, messages: list[dict], tools: list[dict] \| None) → dict` |
+| 205 | method | `ToolCallLoop._execute_one` | `(self, call: dict, messages: list[dict], trace: list[dict], round_index: int, session_id: str, user_id: str \| None,) → None` |
+| 251 | method | `ToolCallLoop._stringify` | `(result: dict) → str` |
+| 259 | method | `ToolCallLoop._finalize` | `(self, client: httpx.AsyncClient, messages: list[dict], trace: list[dict], rounds: int,) → dict` |
+
 ### `services/chat_service/__init__.py`
 
 - **行数**：2　**类**：0　**函数/方法**：0
 - **内部依赖**：（无）
 
 （无类 / 函数定义）
+
+### `services/chat_service/attachments.py`
+
+- **行数**：266　**类**：1　**函数/方法**：10
+- **职责**：附件处理：接收上传文件 → 提取正文 → 生成描述符
+- **内部依赖**：`shared.utils.config`、`shared.utils.logging`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 47 | class | `Attachment` | `` |
+| 61 | method | `Attachment.chars` | `(self) → int` |
+| 64 | method | `Attachment.to_dict` | `(self) → dict` |
+| 78 | function | `_uploads_dir` | `() → Path` |
+| 87 | function | `_decode_text` | `(content: bytes) → str` |
+| 97 | function | `_extract_pdf` | `(content: bytes) → str` |
+| 125 | function | `_extract_xlsx` | `(content: bytes) → str` |
+| 154 | function | `classify` | `(filename: str, media_type: str = "") → str` |
+| 168 | function | `process_upload` | `(filename: str, content: bytes, media_type: str = "") → Attachment` |
+| 218 | function | `build_context` | `(attachments: list[dict]) → tuple[str, list[str]]` |
+| 259 | function | `image_data_url` | `(stored_path: str, media_type: str) → str \| None` |
 
 ### `services/chat_service/config_api.py`
 
@@ -684,22 +809,34 @@
 
 ### `services/chat_service/main.py`
 
-- **行数**：145　**类**：0　**函数/方法**：10
+- **行数**：350　**类**：0　**函数/方法**：22
 - **职责**：对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。
-- **内部依赖**：`services.chat_service.config_api`、`shared.utils.config`、`shared.utils.logging`
+- **内部依赖**：`services.chat_service.attachments`、`services.chat_service.config_api`、`shared.utils`、`shared.utils.config`、`shared.utils.logging`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 27 | function | `lifespan` | `(app: FastAPI)` |
-| 53 | function | `health` | `()` |
-| 60 | function | `proxy_chat` | `(request: Request)` |
-| 71 | function | `proxy_rag_query` | `(request: Request)` |
-| 82 | function | `proxy_rag_upload` | `(request: Request)` |
-| 103 | function | `proxy_rag_documents` | `(request: Request)` |
-| 114 | function | `proxy_rag_delete` | `(document_id: str)` |
-| 124 | function | `proxy_tasks` | `()` |
-| 132 | function | `proxy_agents` | `()` |
-| 140 | function | `proxy_task_status` | `(task_id: str)` |
+| 31 | function | `lifespan` | `(app: FastAPI)` |
+| 54 | function | `_strip_api_prefix` | `(request: Request, call_next)` |
+| 72 | function | `health` | `()` |
+| 79 | function | `proxy_chat` | `(request: Request)` |
+| 90 | function | `proxy_rag_query` | `(request: Request)` |
+| 101 | function | `proxy_rag_upload` | `(request: Request)` |
+| 122 | function | `proxy_rag_documents` | `(request: Request)` |
+| 133 | function | `proxy_rag_delete` | `(document_id: str)` |
+| 143 | function | `proxy_tasks` | `()` |
+| 151 | function | `proxy_agents` | `()` |
+| 163 | function | `upload_attachment` | `(file: UploadFile = File(...))` |
+| 194 | function | `attachment_limits` | `()` |
+| 212 | function | `_require_desktop` | `() → None` |
+| 221 | function | `desktop_status` | `()` |
+| 232 | function | `workspace_info` | `()` |
+| 243 | function | `workspace_list` | `(path: str = "")` |
+| 253 | function | `workspace_set` | `(payload: dict)` |
+| 266 | function | `workspace_select` | `()` |
+| 273 | function | `_pick` | `() → str` |
+| 306 | function | `proxy_tools` | `()` |
+| 317 | function | `proxy_task_status` | `(task_id: str)` |
+| 340 | function | `spa_fallback` | `(full_path: str)` |
 
 ### `services/knowledge_service/__init__.py`
 
@@ -727,26 +864,25 @@
 
 ### `services/knowledge_service/ingestion.py`
 
-- **行数**：336　**类**：2　**函数/方法**：12
+- **行数**：262　**类**：2　**函数/方法**：11
 - **职责**：文档预处理流水线
-- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`
+- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`、`shared.vectorstore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 21 | class | `DocumentChunk` | `` |
-| 23 | method | `DocumentChunk.__init__` | `(self, chunk_id: str, text: str, metadata: dict, chunk_index: int,)` |
-| 36 | class | `DocumentIngestionPipeline` | `` |
-| 42 | method | `DocumentIngestionPipeline.__init__` | `(self, settings: Settings)` |
-| 48 | method | `DocumentIngestionPipeline.initialize` | `(self) → None` |
-| 69 | method | `DocumentIngestionPipeline.close` | `(self) → None` |
-| 73 | method | `DocumentIngestionPipeline.process_and_index` | `(self, document_id: str, filename: str, content: bytes, content_type: str, knowledge_base: str = "项目知识库",) → int` |
-| 122 | method | `DocumentIngestionPipeline._parse_document` | `(self, content: bytes, content_type: str) → str` |
-| 136 | method | `DocumentIngestionPipeline._parse_pdf` | `(self, content: bytes) → str` |
-| 157 | method | `DocumentIngestionPipeline._clean_text` | `(self, text: str) → str` |
-| 167 | method | `DocumentIngestionPipeline._chunk_text` | `(self, text: str, chunk_size: int, chunk_overlap: int, document_id: str, filename: str, knowledge_base: str,) → list[DocumentChunk]` |
-| 239 | method | `DocumentIngestionPipeline._index_chunks` | `(self, chunks: list[DocumentChunk]) → None` |
-| 253 | method | `DocumentIngestionPipeline._generate_embeddings` | `(self, texts: list[str]) → list[list[float]]` |
-| 262 | method | `DocumentIngestionPipeline._insert_to_milvus` | `(self, chunks: list[DocumentChunk], embeddings: list[list[float]],) → None` |
+| 22 | class | `DocumentChunk` | `` |
+| 24 | method | `DocumentChunk.__init__` | `(self, chunk_id: str, text: str, metadata: dict, chunk_index: int,)` |
+| 37 | class | `DocumentIngestionPipeline` | `` |
+| 43 | method | `DocumentIngestionPipeline.__init__` | `(self, settings: Settings)` |
+| 51 | method | `DocumentIngestionPipeline.initialize` | `(self) → None` |
+| 63 | method | `DocumentIngestionPipeline.close` | `(self) → None` |
+| 67 | method | `DocumentIngestionPipeline.process_and_index` | `(self, document_id: str, filename: str, content: bytes, content_type: str, knowledge_base: str = "项目知识库",) → int` |
+| 116 | method | `DocumentIngestionPipeline._parse_document` | `(self, content: bytes, content_type: str) → str` |
+| 130 | method | `DocumentIngestionPipeline._parse_pdf` | `(self, content: bytes) → str` |
+| 151 | method | `DocumentIngestionPipeline._clean_text` | `(self, text: str) → str` |
+| 161 | method | `DocumentIngestionPipeline._chunk_text` | `(self, text: str, chunk_size: int, chunk_overlap: int, document_id: str, filename: str, knowledge_base: str,) → list[DocumentChunk]` |
+| 233 | method | `DocumentIngestionPipeline._index_chunks` | `(self, chunks: list[DocumentChunk]) → None` |
+| 254 | method | `DocumentIngestionPipeline._generate_embeddings` | `(self, texts: list[str]) → list[list[float]]` |
 
 ### `services/knowledge_service/main.py`
 
@@ -790,29 +926,28 @@
 
 ### `services/knowledge_service/retrieval.py`
 
-- **行数**：429　**类**：2　**函数/方法**：15
+- **行数**：334　**类**：2　**函数/方法**：14
 - **职责**：混合检索模块
-- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`
+- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`、`shared.vectorstore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 23 | class | `SearchResult` | `` |
-| 25 | method | `SearchResult.__init__` | `(self, chunk_id: str, text: str, score: float, source: dict \| None = None, chunk_index: int = 0,)` |
-| 40 | class | `HybridRetriever` | `` |
-| 46 | method | `HybridRetriever.__init__` | `(self, settings: Settings)` |
-| 56 | method | `HybridRetriever.initialize` | `(self) → None` |
-| 86 | method | `HybridRetriever.close` | `(self) → None` |
-| 94 | method | `HybridRetriever.hybrid_search` | `(self, query: str, top_k: int = 20, knowledge_bases: list[str] \| None = None,) → list[SearchResult]` |
-| 128 | method | `HybridRetriever._dense_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
-| 183 | method | `HybridRetriever._sparse_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
-| 238 | method | `HybridRetriever._generate_query_embedding` | `(self, query: str) → list[float]` |
-| 246 | method | `HybridRetriever.list_documents` | `(self, knowledge_base: str \| None = None) → list[dict]` |
-| 284 | method | `HybridRetriever.delete_document` | `(self, document_id: str) → int` |
-| 300 | method | `HybridRetriever._ensure_collection` | `(self) → None` |
-| 320 | method | `HybridRetriever._ensure_sparse_index` | `(self) → None` |
-| 332 | method | `HybridRetriever._rebuild_sparse_index` | `(self) → None` |
-| 376 | method | `HybridRetriever._merge_results` | `(self, dense: list[SearchResult], sparse: list[SearchResult],) → list[SearchResult]` |
-| 416 | method | `HybridRetriever._tokenize` | `(self, text: str) → list[str]` |
+| 24 | class | `SearchResult` | `` |
+| 26 | method | `SearchResult.__init__` | `(self, chunk_id: str, text: str, score: float, source: dict \| None = None, chunk_index: int = 0,)` |
+| 41 | class | `HybridRetriever` | `` |
+| 47 | method | `HybridRetriever.__init__` | `(self, settings: Settings)` |
+| 57 | method | `HybridRetriever.initialize` | `(self) → None` |
+| 62 | method | `HybridRetriever.close` | `(self) → None` |
+| 66 | method | `HybridRetriever.hybrid_search` | `(self, query: str, top_k: int = 20, knowledge_bases: list[str] \| None = None,) → list[SearchResult]` |
+| 97 | method | `HybridRetriever._dense_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
+| 126 | method | `HybridRetriever._sparse_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
+| 181 | method | `HybridRetriever._generate_query_embedding` | `(self, query: str) → list[float]` |
+| 189 | method | `HybridRetriever.list_documents` | `(self, knowledge_base: str \| None = None) → list[dict]` |
+| 218 | method | `HybridRetriever.delete_document` | `(self, document_id: str) → int` |
+| 230 | method | `HybridRetriever._ensure_sparse_index` | `(self) → None` |
+| 244 | method | `HybridRetriever._rebuild_sparse_index` | `(self) → None` |
+| 281 | method | `HybridRetriever._merge_results` | `(self, dense: list[SearchResult], sparse: list[SearchResult],) → list[SearchResult]` |
+| 321 | method | `HybridRetriever._tokenize` | `(self, text: str) → list[str]` |
 
 ### `services/model_gateway/__init__.py`
 
@@ -823,7 +958,7 @@
 
 ### `services/model_gateway/main.py`
 
-- **行数**：334　**类**：5　**函数/方法**：8
+- **行数**：362　**类**：5　**函数/方法**：8
 - **职责**：模型网关服务 (Model Gateway)
 - **内部依赖**：`services.model_gateway.router`、`services.model_gateway.token_tracker`、`shared.utils.config`、`shared.utils.logging`
 
@@ -831,21 +966,21 @@
 |---:|---|---|---|
 | 33 | function | `lifespan` | `(app: FastAPI)` |
 | 61 | class | `ChatMessage` | `(BaseModel)` |
-| 66 | class | `ChatCompletionRequest` | `(BaseModel)` |
-| 76 | class | `ChatCompletionChoice` | `(BaseModel)` |
-| 82 | class | `ChatUsage` | `(BaseModel)` |
-| 88 | class | `ChatCompletionResponse` | `(BaseModel)` |
-| 100 | function | `health_check` | `()` |
-| 110 | function | `version` | `()` |
-| 120 | function | `list_models` | `()` |
-| 139 | function | `reload_config` | `(config: dict[str, str])` |
-| 183 | function | `chat_completions` | `(request: ChatCompletionRequest, http_request: Request)` |
-| 227 | function | `_sync_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,) → ChatCompletionResponse` |
-| 276 | function | `_stream_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,)` |
+| 75 | class | `ChatCompletionRequest` | `(BaseModel)` |
+| 88 | class | `ChatCompletionChoice` | `(BaseModel)` |
+| 94 | class | `ChatUsage` | `(BaseModel)` |
+| 100 | class | `ChatCompletionResponse` | `(BaseModel)` |
+| 112 | function | `health_check` | `()` |
+| 122 | function | `version` | `()` |
+| 132 | function | `list_models` | `()` |
+| 151 | function | `reload_config` | `(config: dict[str, str])` |
+| 195 | function | `chat_completions` | `(request: ChatCompletionRequest, http_request: Request)` |
+| 239 | function | `_sync_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,) → ChatCompletionResponse` |
+| 301 | function | `_stream_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,)` |
 
 ### `services/model_gateway/router.py`
 
-- **行数**：304　**类**：3　**函数/方法**：10
+- **行数**：409　**类**：3　**函数/方法**：11
 - **职责**：模型路由器
 - **内部依赖**：`shared.utils.config`、`shared.utils.logging`
 
@@ -858,12 +993,13 @@
 | 61 | method | `ModelRouter.initialize` | `(self) → None` |
 | 105 | method | `ModelRouter.close` | `(self) → None` |
 | 110 | method | `ModelRouter.route` | `(self, request: ModelRouteRequest) → ModelRouteResult` |
-| 164 | method | `ModelRouter.complete` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 175 | method | `ModelRouter.complete_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
-| 188 | method | `ModelRouter._call_deepseek` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 214 | method | `ModelRouter._call_deepseek_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
-| 244 | method | `ModelRouter._call_claude` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 275 | method | `ModelRouter._call_claude_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
+| 167 | method | `ModelRouter.complete` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, tools: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 201 | method | `ModelRouter.complete_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None,) → AsyncIterator[dict]` |
+| 216 | method | `ModelRouter._call_deepseek` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, tools: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 275 | method | `ModelRouter._call_deepseek_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None) → AsyncIterator[dict]` |
+| 306 | method | `ModelRouter._to_anthropic_messages` | `(messages: list[dict] \| None) → tuple[str, list[dict]]` |
+| 330 | method | `ModelRouter._call_claude` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 377 | method | `ModelRouter._call_claude_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None) → AsyncIterator[dict]` |
 
 ### `services/model_gateway/token_tracker.py`
 
@@ -952,22 +1088,26 @@
 
 ### `shared/models/database.py`
 
-- **行数**：134　**类**：1　**函数/方法**：9
-- **职责**：数据库连接管理模块
+- **行数**：185　**类**：1　**函数/方法**：13
+- **职责**：数据库连接管理模块（全部惰性化）
 - **内部依赖**：`shared.utils.config`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 37 | class | `Base` | `(DeclarativeBase)` |
-| 42 | function | `get_pg_session` | `() → AsyncGenerator[AsyncSession, None]` |
-| 60 | function | `init_mongodb` | `() → None` |
-| 69 | function | `close_mongodb` | `() → None` |
-| 77 | function | `get_mongo_db` | `() → AsyncIOMotorDatabase` |
-| 90 | function | `init_redis` | `() → None` |
-| 101 | function | `close_redis` | `() → None` |
-| 109 | function | `get_redis` | `() → Redis` |
-| 122 | function | `init_milvus` | `() → None` |
-| 131 | function | `close_milvus` | `() → None` |
+| 35 | class | `Base` | `(DeclarativeBase)` |
+| 48 | function | `_build_pg_engine` | `() → Any` |
+| 60 | function | `get_pg_engine` | `() → Any` |
+| 68 | function | `get_pg_session_factory` | `() → Any` |
+| 82 | function | `__getattr__` | `(name: str) → Any` |
+| 95 | function | `get_pg_session` | `() → AsyncGenerator[Any, None]` |
+| 113 | function | `init_mongodb` | `() → None` |
+| 123 | function | `close_mongodb` | `() → None` |
+| 132 | function | `get_mongo_db` | `() → "AsyncIOMotorDatabase"` |
+| 145 | function | `init_redis` | `() → None` |
+| 154 | function | `close_redis` | `() → None` |
+| 162 | function | `get_redis` | `() → Any` |
+| 173 | function | `init_milvus` | `() → None` |
+| 180 | function | `close_milvus` | `() → None` |
 
 ### `shared/models/mongodb/__init__.py`
 
@@ -1251,7 +1391,7 @@
 
 ### `shared/utils/config.py`
 
-- **行数**：206　**类**：1　**函数/方法**：13
+- **行数**：235　**类**：1　**函数/方法**：13
 - **职责**：GrassSea AI — 统一配置管理模块
 - **内部依赖**：`shared.utils.secrets`
 
@@ -1263,14 +1403,14 @@
 | 68 | method | `Settings.POSTGRES_SYNC_URI` | `(self) → str` |
 | 82 | method | `Settings.MONGODB_URI` | `(self) → str` |
 | 95 | method | `Settings.REDIS_URI` | `(self) → str` |
-| 105 | method | `Settings.MILVUS_URI` | `(self) → str` |
-| 117 | method | `Settings.MINIO_URI` | `(self) → str` |
-| 128 | method | `Settings.RABBITMQ_URI` | `(self) → str` |
-| 138 | method | `Settings.NEO4J_URI` | `(self) → str` |
-| 143 | method | `Settings.CELERY_BROKER_URL` | `(self) → str` |
-| 147 | method | `Settings.CELERY_RESULT_BACKEND` | `(self) → str` |
-| 182 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
-| 187 | function | `get_settings` | `() → Settings` |
+| 115 | method | `Settings.MILVUS_URI` | `(self) → str` |
+| 127 | method | `Settings.MINIO_URI` | `(self) → str` |
+| 138 | method | `Settings.RABBITMQ_URI` | `(self) → str` |
+| 148 | method | `Settings.NEO4J_URI` | `(self) → str` |
+| 153 | method | `Settings.CELERY_BROKER_URL` | `(self) → str` |
+| 157 | method | `Settings.CELERY_RESULT_BACKEND` | `(self) → str` |
+| 211 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
+| 216 | function | `get_settings` | `() → Settings` |
 
 ### `shared/utils/embedding.py`
 
@@ -1329,6 +1469,100 @@
 | 115 | function | `save_secrets` | `(secrets: dict[str, str]) → None` |
 | 140 | function | `update_secret` | `(key: str, value: str) → None` |
 | 152 | function | `is_sensitive_key` | `(key: str) → bool` |
+
+### `shared/utils/workspace.py`
+
+- **行数**：258　**类**：1　**函数/方法**：11
+- **职责**：工作文件夹访问（桌面模式）
+- **内部依赖**：`shared.utils.config`、`shared.utils.logging`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 43 | class | `WorkspaceError` | `(Exception)` |
+| 47 | function | `is_enabled` | `() → bool` |
+| 52 | function | `_require_enabled` | `() → None` |
+| 57 | function | `get_root` | `() → Path \| None` |
+| 71 | function | `set_root` | `(path: str) → Path` |
+| 87 | function | `resolve` | `(rel_path: str = "") → Path` |
+| 101 | function | `list_dir` | `(rel_path: str = "", max_entries: int = MAX_LIST_ENTRIES) → dict` |
+| 144 | function | `read_file` | `(rel_path: str, max_chars: int = MAX_READ_CHARS) → dict` |
+| 180 | function | `write_file` | `(rel_path: str, content: str, overwrite: bool = False) → dict` |
+| 209 | function | `tree` | `(rel_path: str = "", max_depth: int = 2, max_entries: int = 200) → dict` |
+| 218 | method | `WorkspaceError.walk` | `(directory: Path, depth: int) → None` |
+| 250 | function | `summary_lines` | `() → list[str]` |
+
+### `shared/vectorstore/__init__.py`
+
+- **行数**：40　**类**：0　**函数/方法**：1
+- **职责**：向量存储抽象层 —— 按配置选择后端
+- **内部依赖**：`shared.utils.config`、`shared.vectorstore.base`、`shared.vectorstore.local`、`shared.vectorstore.milvus`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 22 | function | `get_vector_store` | `(settings: Settings) → VectorStore` |
+
+### `shared/vectorstore/base.py`
+
+- **行数**：99　**类**：2　**函数/方法**：9
+- **职责**：向量存储协议与数据结构
+- **内部依赖**：（无）
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 19 | class | `VectorRecord` | `` |
+| 34 | class | `VectorStore` | `(ABC)` |
+| 47 | method | `VectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 53 | method | `VectorStore.available` | `(self) → bool` |
+| 60 | method | `VectorStore.initialize` | `(self) → None` |
+| 64 | method | `VectorStore.close` | `(self) → None` |
+| 70 | method | `VectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 80 | method | `VectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 89 | method | `VectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 93 | method | `VectorStore.delete_document` | `(self, document_id: str) → int` |
+| 97 | method | `VectorStore.count` | `(self) → int` |
+
+### `shared/vectorstore/local.py`
+
+- **行数**：268　**类**：1　**函数/方法**：13
+- **职责**：内置向量存储 —— SQLite 持久化 + numpy 精确余弦检索
+- **内部依赖**：`shared.utils.logging`、`shared.vectorstore.base`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 41 | class | `LocalVectorStore` | `(VectorStore)` |
+| 46 | method | `LocalVectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 59 | method | `LocalVectorStore.resolve_db_path` | `(settings) → Path` |
+| 68 | method | `LocalVectorStore._resolve_db_path` | `(self) → Path` |
+| 73 | method | `LocalVectorStore._connect` | `(self) → sqlite3.Connection` |
+| 81 | method | `LocalVectorStore.initialize` | `(self) → None` |
+| 96 | method | `LocalVectorStore.close` | `(self) → None` |
+| 104 | method | `LocalVectorStore._invalidate_cache` | `(self) → None` |
+| 109 | method | `LocalVectorStore._load_matrix` | `(self) → None` |
+| 144 | method | `LocalVectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 185 | method | `LocalVectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 227 | method | `LocalVectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 244 | method | `LocalVectorStore.delete_document` | `(self, document_id: str) → int` |
+| 258 | method | `LocalVectorStore.count` | `(self) → int` |
+
+### `shared/vectorstore/milvus.py`
+
+- **行数**：240　**类**：1　**函数/方法**：10
+- **职责**：Milvus 向量存储后端
+- **内部依赖**：`shared.utils.logging`、`shared.vectorstore.base`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 19 | class | `MilvusVectorStore` | `(VectorStore)` |
+| 24 | method | `MilvusVectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 31 | method | `MilvusVectorStore.initialize` | `(self) → None` |
+| 59 | method | `MilvusVectorStore.close` | `(self) → None` |
+| 70 | method | `MilvusVectorStore._read_dim` | `(collection) → int \| None` |
+| 79 | method | `MilvusVectorStore._ensure_collection` | `(self)` |
+| 99 | method | `MilvusVectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 157 | method | `MilvusVectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 199 | method | `MilvusVectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 224 | method | `MilvusVectorStore.delete_document` | `(self, document_id: str) → int` |
+| 232 | method | `MilvusVectorStore.count` | `(self) → int` |
 
 ### `tests/__init__.py`
 
@@ -1473,13 +1707,13 @@
 
 ### `tools/bootstrap.py`
 
-- **行数**：78　**类**：0　**函数/方法**：1
+- **行数**：82　**类**：0　**函数/方法**：1
 - **职责**：工具引导模块 — 统一实例化并注册 tools/ 下的全部工具
-- **内部依赖**：`shared.protocols.tool`、`shared.utils.logging`、`tools.base.registry`、`tools.cad.cad_draw`、`tools.cad.cad_parse`、`tools.cad.dwg_converter`、`tools.compliance.reg_check`、`tools.computation.hull_transform`、`tools.computation.hydrostatics`、`tools.computation.resistance`、`tools.computation.stability`、`tools.file.ocr_engine`、`tools.file.pdf_parser`、`tools.file.todo_manager`、`tools.file.web_search`、`tools.file.xlsx_parser`、`tools.report.report_gen`
+- **内部依赖**：`shared.protocols.tool`、`shared.utils.logging`、`tools.base.registry`、`tools.cad.cad_draw`、`tools.cad.cad_parse`、`tools.cad.dwg_converter`、`tools.compliance.reg_check`、`tools.computation.hull_transform`、`tools.computation.hydrostatics`、`tools.computation.resistance`、`tools.computation.stability`、`tools.file.ocr_engine`、`tools.file.pdf_parser`、`tools.file.todo_manager`、`tools.file.web_search`、`tools.file.workspace`、`tools.file.xlsx_parser`、`tools.report.report_gen`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 53 | function | `build_tool_registry` | `() → ToolRegistry` |
+| 57 | function | `build_tool_registry` | `() → ToolRegistry` |
 
 ### `tools/cad/__init__.py`
 
@@ -1652,6 +1886,28 @@
 | 14 | class | `WebSearchTool` | `(BaseTool)` |
 | 15 | method | `WebSearchTool.__init__` | `(self)` |
 | 17 | method | `WebSearchTool.execute` | `(self, params: dict, context: dict) → dict` |
+
+### `tools/file/workspace.py`
+
+- **行数**：196　**类**：4　**函数/方法**：9
+- **职责**：工作文件夹工具 — 让模型按需读写用户选定文件夹中的文件
+- **内部依赖**：`shared.protocols.tool`、`shared.utils`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 111 | class | `_WorkspaceToolBase` | `(BaseTool)` |
+| 114 | method | `_WorkspaceToolBase.execute` | `(self, params: dict, context: dict) → dict` |
+| 117 | method | `_WorkspaceToolBase._guard` | `(self) → dict \| None` |
+| 131 | method | `_WorkspaceToolBase._fail` | `(exc: Exception) → dict` |
+| 135 | class | `WorkspaceListTool` | `(_WorkspaceToolBase)` |
+| 138 | method | `WorkspaceListTool.__init__` | `(self) → None` |
+| 141 | method | `WorkspaceListTool.execute` | `(self, params: dict, context: dict) → dict` |
+| 153 | class | `WorkspaceReadTool` | `(_WorkspaceToolBase)` |
+| 156 | method | `WorkspaceReadTool.__init__` | `(self) → None` |
+| 159 | method | `WorkspaceReadTool.execute` | `(self, params: dict, context: dict) → dict` |
+| 174 | class | `WorkspaceWriteTool` | `(_WorkspaceToolBase)` |
+| 177 | method | `WorkspaceWriteTool.__init__` | `(self) → None` |
+| 180 | method | `WorkspaceWriteTool.execute` | `(self, params: dict, context: dict) → dict` |
 
 ### `tools/file/xlsx_parser.py`
 

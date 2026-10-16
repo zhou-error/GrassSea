@@ -98,6 +98,16 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # --- Milvus 2.4+ ---
+    # --- 向量存储后端 ---
+    # local = 内置 SQLite + numpy 精确检索，零外部依赖（桌面/个人使用默认）
+    # milvus = Milvus 2.4，适合服务器部署与超大规模
+    VECTOR_BACKEND: str = "local"
+    # 向量库数据文件路径（留空则使用 <DATA_DIR>/vectorstore/knowledge.sqlite3）
+    VECTOR_STORE_PATH: str = ""
+    # 本地数据目录（留空则使用 <项目根>/data）；桌面版会指向用户可写目录
+    DATA_DIR: str = ""
+
+    # --- Milvus（仅 VECTOR_BACKEND=milvus 时使用）---
     MILVUS_HOST: str = "localhost"
     MILVUS_PORT: int = 19530
 
@@ -171,6 +181,25 @@ class Settings(BaseSettings):
     # --- Search ---
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
+
+    # --- 桌面模式与工作文件夹 ---
+    # 桌面模式开关：由 app.launcher --desktop 置为 true；
+    # 开启后才会启用工作文件夹读写与原生对话框等本机能力
+    DESKTOP_MODE: bool = False
+    # 预置的工作文件夹（留空则由用户在界面上选择）
+    WORKSPACE_ROOT: str = ""
+
+    # --- 工具调用（由模型自主决定调用哪个工具）---
+    # 总开关：关闭后 /chat 回到原有的规则规划路径
+    TOOL_CALLING_ENABLED: bool = True
+    # 最多几轮「模型思考 → 调用工具 → 结果回灌」
+    TOOL_CALL_MAX_ROUNDS: int = 6
+    # 整个工具调用循环的总超时（秒）
+    TOOL_CALL_TIMEOUT_SECONDS: int = 120
+    # 工具调用使用的模型
+    TOOL_CALL_MODEL: str = "deepseek-chat"
+    # 是否把未实现的工具也暴露给模型（默认否：避免模型浪费轮次）
+    TOOL_CALL_EXPOSE_UNIMPLEMENTED: bool = False
 
     # --- 内部服务 URL（Docker 中自动覆盖为容器名）---
     MODEL_GATEWAY_URL: str = "http://localhost:8004"

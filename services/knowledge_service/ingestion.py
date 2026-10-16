@@ -2,7 +2,7 @@
 
 支持 PDF, TXT, Markdown 文件解析。
 按语义分块 (chunk_size=512, overlap=64)。
-集成 Milvus 向量存储。
+向量写入通过 shared.vectorstore 抽象层完成，后端由 VECTOR_BACKEND 决定（local / milvus）。
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Optional
 
 from shared.utils.config import Settings
 from shared.utils.embedding import get_embedder
+from shared.vectorstore import VectorRecord, get_vector_store
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -44,31 +45,24 @@ class DocumentIngestionPipeline:
         self.chunk_size = 512
         self.chunk_overlap = 64
         self._embedding_client = None
+        # 向量后端由配置决定，上层不再直接依赖 pymilvus
+        self._store = get_vector_store(settings)
 
     async def initialize(self) -> None:
-        """初始化 Embedding 客户端和 Milvus 连接"""
-        from pymilvus import connections
-
-        try:
-            connections.connect(
-                alias="default",
-                host=self.settings.MILVUS_HOST,
-                port=self.settings.MILVUS_PORT,
-            )
-            logger.info("Milvus connected for ingestion")
-        except Exception as e:
-            logger.warning("Milvus connection failed for ingestion", error=str(e))
+        """初始化向量存储与 Embedding 后端"""
+        await self._store.initialize()
 
         logger.info(
             "Document ingestion pipeline initialized",
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             embedding_model=self.settings.EMBEDDING_MODEL,
+            vector_backend=self._store.name,
         )
 
     async def close(self) -> None:
         """清理资源"""
-        pass
+        await self._store.close()
 
     async def process_and_index(
         self,
@@ -78,7 +72,7 @@ class DocumentIngestionPipeline:
         content_type: str,
         knowledge_base: str = "项目知识库",
     ) -> int:
-        """处理文档并索引到 Milvus
+        """处理文档并索引到向量存储
 
         Args:
             document_id: 文档唯一 ID
@@ -106,7 +100,7 @@ class DocumentIngestionPipeline:
             knowledge_base=knowledge_base,
         )
 
-        # Step 4: 生成 Embedding 并写入 Milvus
+        # Step 4: 生成 Embedding 并写入向量存储
         await self._index_chunks(chunks)
 
         logger.info(
@@ -237,18 +231,25 @@ class DocumentIngestionPipeline:
         return chunks
 
     async def _index_chunks(self, chunks: list[DocumentChunk]) -> None:
-        """将 chunk 向量化并写入 Milvus
-
-        每个 chunk 生成 embedding 后插入 Milvus collection。
-        """
+        """将 chunk 向量化并写入向量存储（后端无关）"""
         if not chunks:
             return
 
-        # 生成 embeddings（调用 OpenAI 兼容 API）
         embeddings = await self._generate_embeddings([c.text for c in chunks])
 
-        # 写入 Milvus
-        await self._insert_to_milvus(chunks, embeddings)
+        records = [
+            VectorRecord(
+                chunk_id=c.chunk_id,
+                text=c.text,
+                document_id=str(c.metadata.get("document_id", "")),
+                knowledge_base=str(c.metadata.get("knowledge_base", "")),
+                filename=str(c.metadata.get("filename", "")),
+                chunk_index=c.chunk_index,
+            )
+            for c in chunks
+        ]
+        written = await self._store.upsert(records, embeddings)
+        logger.debug("分块已写入向量存储", count=written, backend=self._store.name)
 
     async def _generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """批量生成 Embedding
@@ -258,78 +259,3 @@ class DocumentIngestionPipeline:
         embedder = get_embedder(self.settings)
         logger.debug("Generating embeddings", count=len(texts), backend=embedder.name)
         return await embedder.embed(texts)
-
-    async def _insert_to_milvus(
-        self,
-        chunks: list[DocumentChunk],
-        embeddings: list[list[float]],
-    ) -> None:
-        """将 chunk 和 embedding 写入 Milvus
-
-        Milvus Collection Schema:
-          - id: VARCHAR (primary key)
-          - text: VARCHAR
-          - embedding: FLOAT_VECTOR
-          - metadata: JSON
-        """
-        from pymilvus import Collection, DataType, FieldSchema, CollectionSchema, utility
-
-        collection_name = "grasssea_knowledge"
-
-        # 如果 collection 不存在则创建
-        if not utility.has_collection(collection_name):
-            fields = [
-                FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-                FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=100),
-                FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=len(embeddings[0])),
-                FieldSchema(name="knowledge_base", dtype=DataType.VARCHAR, max_length=256),
-                FieldSchema(name="filename", dtype=DataType.VARCHAR, max_length=500),
-                FieldSchema(name="chunk_index", dtype=DataType.INT64),
-            ]
-            schema = CollectionSchema(fields, description="GrassSea Knowledge Base")
-            collection = Collection(name=collection_name, schema=schema)
-
-            # 创建索引
-            index_params = {
-                "metric_type": "COSINE",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 128},
-            }
-            collection.create_index(field_name="embedding", index_params=index_params)
-            collection.load()
-        else:
-            collection = Collection(name=collection_name)
-            existing_dim = next(
-                (int(f.params["dim"]) for f in collection.schema.fields if f.name == "embedding"),
-                None,
-            )
-            if existing_dim is not None and existing_dim != len(embeddings[0]):
-                raise RuntimeError(
-                    f"Milvus 集合 '{collection_name}' 当前维度为 {existing_dim}，"
-                    f"而向量后端输出 {len(embeddings[0])} 维。"
-                    "更换 embedding 模型后必须重建该集合后重新入库。"
-                )
-            if "document_id" not in {f.name for f in collection.schema.fields}:
-                raise RuntimeError(
-                    f"Milvus 集合 '{collection_name}' 是旧 schema（缺少 document_id 字段），"
-                    "无法支持文档列表与删除。请先执行 "
-                    "uv run python scripts/reset_knowledge_base.py 重建集合，再重新上传文档。"
-                )
-            collection.load()
-
-        # 插入数据
-        entities = [
-            [c.chunk_id for c in chunks],                             # id
-            [c.metadata.get("document_id", "") for c in chunks],      # document_id
-            [c.text for c in chunks],                                 # text
-            embeddings,                                               # embedding
-            [c.metadata.get("knowledge_base", "") for c in chunks],   # knowledge_base
-            [c.metadata.get("filename", "") for c in chunks],         # filename
-            [c.chunk_index for c in chunks],                          # chunk_index
-        ]
-
-        collection.insert(entities)
-        collection.flush()
-
-        logger.debug("Chunks inserted to Milvus", count=len(chunks))

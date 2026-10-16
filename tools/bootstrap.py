@@ -26,6 +26,7 @@ from tools.file.ocr_engine import OcrEngineTool
 from tools.file.pdf_parser import PdfParserTool
 from tools.file.todo_manager import TodoManagerTool
 from tools.file.web_search import WebSearchTool
+from tools.file.workspace import WorkspaceListTool, WorkspaceReadTool, WorkspaceWriteTool
 from tools.file.xlsx_parser import XlsxParserTool
 from tools.report.report_gen import ReportGenTool
 
@@ -45,6 +46,9 @@ TOOL_CLASSES: tuple[type[BaseTool], ...] = (
     PdfParserTool,
     TodoManagerTool,
     WebSearchTool,
+    WorkspaceListTool,
+    WorkspaceReadTool,
+    WorkspaceWriteTool,
     XlsxParserTool,
     ReportGenTool,
 )
