@@ -16,6 +16,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Alembic Config 对象
 config = context.config
 
+# 数据库连接串统一来自 .env（POSTGRES_URI，async 驱动），
+# 不在 alembic.ini 中重复维护，避免同步/异步驱动不一致。
+from shared.utils.config import get_settings
+
+config.set_main_option("sqlalchemy.url", get_settings().POSTGRES_URI)
+
 # 设置日志
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

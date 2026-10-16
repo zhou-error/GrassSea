@@ -10,12 +10,13 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.knowledge_service.ingestion import DocumentIngestionPipeline
 from services.knowledge_service.retrieval import HybridRetriever
@@ -72,16 +73,22 @@ class RAGQueryRequest(BaseModel):
     """RAG 查询请求"""
     query: str = Field(..., description="用户查询文本")
     top_k: int = Field(default=5, ge=1, le=20)
-    knowledge_bases: list[str] = Field(
-        default=["规范标准库", "船舶设计库"],
-        description="检索的知识库列表"
+    knowledge_bases: list[str] | None = Field(
+        default=None,
+        description="限定的知识库列表；留空表示检索全部知识库"
     )
     stream: bool = Field(default=False)
     include_sources: bool = Field(default=True)
 
 
 class SearchResult(BaseModel):
-    """单条检索结果"""
+    """单条检索结果
+
+    注意：retrieval.py 里同名的是普通类，这里必须允许按属性读取，
+    否则 /rag/query 在检索到结果时会因模型校验失败而 500。
+    """
+    model_config = ConfigDict(from_attributes=True)
+
     chunk_id: str
     text: str
     score: float
@@ -105,6 +112,27 @@ class DocumentUploadResponse(BaseModel):
     status: str
     chunks_count: int = 0
 
+class DocumentItem(BaseModel):
+    """已入库文档"""
+    document_id: str
+    filename: str
+    knowledge_base: str = ""
+    chunks: int = 0
+    status: str = "indexed"
+
+
+class DocumentListResponse(BaseModel):
+    """文档列表响应"""
+    total: int
+    documents: list[DocumentItem] = Field(default_factory=list)
+
+
+class DeleteDocumentResponse(BaseModel):
+    """删除文档响应"""
+    document_id: str
+    deleted_chunks: int
+    status: str
+
 
 # ---- 端点 ----
 
@@ -115,6 +143,53 @@ async def health_check():
         "status": "healthy",
         "service": "knowledge-service",
         "version": settings.APP_VERSION,
+    }
+
+
+@app.get("/admin/status")
+async def admin_status():
+    """查看当前配置状态"""
+    return {
+        "service": "knowledge-service",
+        "deepseek_configured": bool(settings.DEEPSEEK_API_KEY),
+        "openai_configured": bool(settings.OPENAI_API_KEY),
+        "embedding_model": settings.EMBEDDING_MODEL,
+        "model_gateway_url": getattr(settings, "MODEL_GATEWAY_URL", ""),
+    }
+
+
+@app.post("/admin/reload")
+async def reload_config(config: dict[str, str]):
+    """运行时重载配置，无需重启容器。
+
+    接受部分更新：{"DEEPSEEK_API_KEY": "sk-xxx", "OPENAI_API_KEY": "sk-xxx", ...}
+    会重新初始化检索器和生成器。
+    """
+    global retriever, generator, ingestion_pipeline
+
+    updated = False
+    for key, value in config.items():
+        if hasattr(settings, key):
+            old_value = getattr(settings, key, "")
+            setattr(settings, key, value)
+            os.environ[key] = value
+            if old_value != value:
+                updated = True
+            logger.info("Knowledge config reloaded", key=key, changed=(old_value != value))
+
+    if updated:
+        retriever = HybridRetriever(settings)
+        await retriever.initialize()
+        generator = AnswerGenerator(settings)
+        ingestion_pipeline = DocumentIngestionPipeline(settings)
+        await ingestion_pipeline.initialize()
+        logger.info("Knowledge components re-initialized")
+
+    return {
+        "status": "ok",
+        "deepseek_configured": bool(settings.DEEPSEEK_API_KEY),
+        "openai_configured": bool(settings.OPENAI_API_KEY),
+        "message": "配置已更新" if updated else "无变化",
     }
 
 
@@ -221,6 +296,29 @@ async def upload_document(
         filename=file.filename,
         status="indexed",
         chunks_count=chunks_count,
+    )
+
+@app.get("/rag/documents", response_model=DocumentListResponse)
+async def list_documents(knowledge_base: str | None = Query(default=None)):
+    """列出已索引文档（按 document_id 聚合）"""
+    if retriever is None:
+        raise HTTPException(status_code=503, detail="Retriever not ready")
+    documents = await retriever.list_documents(knowledge_base=knowledge_base)
+    return DocumentListResponse(total=len(documents), documents=documents)
+
+
+@app.delete("/rag/documents/{document_id}", response_model=DeleteDocumentResponse)
+async def delete_document(document_id: str):
+    """删除指定文档及其全部 chunk"""
+    if retriever is None:
+        raise HTTPException(status_code=503, detail="Retriever not ready")
+    deleted = await retriever.delete_document(document_id)
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DeleteDocumentResponse(
+        document_id=document_id,
+        deleted_chunks=deleted,
+        status="deleted",
     )
 
 

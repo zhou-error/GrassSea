@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import math
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Optional
 
 from shared.utils.config import Settings
+from shared.utils.embedding import get_embedder
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,6 +48,9 @@ class HybridRetriever:
         self.dense_weight = 0.7
         self.sparse_weight = 0.3
         self._bm25_index: dict = {}  # 简易内存 BM25 索引
+        self._indexed_count = 0       # 已建索引的 chunk 数（用于自愈判断）
+        self._collection = None
+        self._collection_name = "grasssea_knowledge"
         self._http_client = None
 
     async def initialize(self) -> None:
@@ -55,7 +59,7 @@ class HybridRetriever:
 
         try:
             connections.connect(
-                alias="retriever",
+                alias="default",
                 host=self.settings.MILVUS_HOST,
                 port=self.settings.MILVUS_PORT,
             )
@@ -65,11 +69,16 @@ class HybridRetriever:
 
         # 加载 collection
         self._collection_name = "grasssea_knowledge"
-        if utility.has_collection(self._collection_name):
-            self._collection = Collection(name=self._collection_name)
-            self._collection.load()
-        else:
-            logger.warning("Milvus collection not found, will create on first insert")
+        try:
+            if utility.has_collection(self._collection_name):
+                self._collection = Collection(name=self._collection_name)
+                self._collection.load()
+                logger.info("Milvus collection loaded", name=self._collection_name)
+            else:
+                logger.warning("Milvus collection not found, will create on first insert")
+                self._collection = None
+        except Exception as e:
+            logger.warning("Milvus collection check failed", error=str(e))
             self._collection = None
 
         logger.info("Hybrid retriever initialized")
@@ -78,7 +87,7 @@ class HybridRetriever:
         """清理资源"""
         from pymilvus import connections
         try:
-            connections.disconnect("retriever")
+            connections.disconnect("default")
         except Exception:
             pass
 
@@ -98,6 +107,12 @@ class HybridRetriever:
         Returns:
             融合排序后的检索结果
         """
+        # 集合由入库流程在服务启动后才创建，检索前必须重新确认绑定
+        await self._ensure_collection()
+
+        # 稀疏索引为空或集合条数变化时自动重建
+        await self._ensure_sparse_index()
+
         # 并行执行两路检索
         dense_results = await self._dense_search(query, top_k, knowledge_bases)
         sparse_results = await self._sparse_search(query, top_k, knowledge_bases)
@@ -142,7 +157,7 @@ class HybridRetriever:
                 param=search_params,
                 limit=top_k,
                 expr=expr,
-                output_fields=["text", "knowledge_base", "filename", "chunk_index"],
+                output_fields=["text", "document_id", "knowledge_base", "filename", "chunk_index"],
             )
 
             search_results = []
@@ -221,31 +236,142 @@ class HybridRetriever:
         return results
 
     async def _generate_query_embedding(self, query: str) -> list[float]:
-        """生成查询 embedding"""
-        if not self.settings.OPENAI_API_KEY:
-            import hashlib
-            h = hashlib.sha256(query.encode()).digest()
-            vec = [float(b) / 255.0 for b in h[:self.settings.EMBEDDING_DIM]]
-            if len(vec) < self.settings.EMBEDDING_DIM:
-                vec += [0.0] * (self.settings.EMBEDDING_DIM - len(vec))
-            return vec[:self.settings.EMBEDDING_DIM]
+        """生成查询向量
 
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.settings.OPENAI_BASE_URL}/embeddings",
-                headers={
-                    "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.settings.EMBEDDING_MODEL,
-                    "input": [query],
+        必须与入库共用 shared.utils.embedding 的同一后端，
+        否则存入与查询的向量空间不一致，稠密检索将完全失效。
+        """
+        return await get_embedder(self.settings).embed_one(query)
+
+    async def list_documents(self, knowledge_base: str | None = None) -> list[dict]:
+        """列出已入库文档（按 document_id 聚合）"""
+        await self._ensure_collection()
+        if self._collection is None:
+            return []
+        expr = 'id != ""'
+        if knowledge_base:
+            expr = f'knowledge_base == "{knowledge_base}"'
+        try:
+            rows = self._collection.query(
+                expr=expr,
+                output_fields=["id", "document_id", "filename", "knowledge_base", "chunk_index"],
+                limit=16384,
+            )
+        except Exception as e:
+            logger.warning("文档列表查询失败", error=str(e))
+            return []
+
+        grouped: dict[str, dict] = {}
+        for row in rows:
+            chunk_id = str(row.get("id", ""))
+            doc_id = str(row.get("document_id") or "")
+            if not doc_id:
+                # 兼容早期数据：chunk id 形如 <document_id>_chunk_<n>
+                doc_id = chunk_id.rsplit("_chunk_", 1)[0] if "_chunk_" in chunk_id else chunk_id
+            entry = grouped.setdefault(
+                doc_id,
+                {
+                    "document_id": doc_id,
+                    "filename": row.get("filename") or "(未知文件)",
+                    "knowledge_base": row.get("knowledge_base", ""),
+                    "chunks": 0,
+                    "status": "indexed",
                 },
             )
-            response.raise_for_status()
-            data = response.json()
-            return data["data"][0]["embedding"]
+            entry["chunks"] += 1
+        return sorted(grouped.values(), key=lambda d: d["filename"])
+
+    async def delete_document(self, document_id: str) -> int:
+        """删除某文档的全部 chunk，返回删除条数"""
+        await self._ensure_collection()
+        if self._collection is None:
+            return 0
+        try:
+            result = self._collection.delete(f'document_id == "{document_id}"')
+            self._collection.flush()
+        except Exception as e:
+            logger.error("删除文档失败", document_id=document_id, error=str(e))
+            raise
+        # 让稀疏索引在下次检索时重建
+        self._bm25_index = {}
+        self._indexed_count = 0
+        return int(getattr(result, "delete_count", 0) or 0)
+
+    async def _ensure_collection(self) -> None:
+        """确保已绑定 Milvus 集合
+
+        集合在首次上传文档时才创建，若检索器在启动时探测不到就永久停留在 None，
+        会导致"上传成功但检索恒为空"。
+        """
+        from pymilvus import Collection, utility
+
+        if self._collection is not None:
+            return
+        try:
+            if not utility.has_collection(self._collection_name):
+                return
+            self._collection = Collection(name=self._collection_name)
+            self._collection.load()
+            logger.info("Milvus 集合已绑定", name=self._collection_name)
+        except Exception as e:
+            logger.warning("Milvus 集合绑定失败", error=str(e))
+            self._collection = None
+
+    async def _ensure_sparse_index(self) -> None:
+        """稀疏索引缺失或集合条数变化时自动重建（无需外部触发）"""
+        if self._collection is None:
+            return
+        try:
+            total = int(self._collection.num_entities)
+        except Exception:
+            total = 0
+        if self._bm25_index and total == self._indexed_count:
+            return
+        await self._rebuild_sparse_index()
+
+    async def _rebuild_sparse_index(self) -> None:
+        """从 Milvus 拉取全部 chunk 构建内存 BM25 索引
+
+        此前 _bm25_index 从未被填充，稀疏检索恒为空，混合检索实际退化为纯稠密检索。
+        """
+        if self._collection is None:
+            return
+        try:
+            rows = self._collection.query(
+                expr='id != ""',
+                output_fields=["id", "text", "knowledge_base", "filename", "chunk_index"],
+                limit=16384,  # Milvus 单次 query 窗口上限为 16384
+            )
+        except Exception as e:
+            logger.warning("BM25 索引构建失败", error=str(e))
+            return
+
+        index: dict = {}
+        total_len = 0
+        for row in rows:
+            doc_id = str(row.get("id", ""))
+            text = row.get("text", "") or ""
+            tokens = self._tokenize(text)
+            chunk_index = row.get("chunk_index", 0)
+            index[f"_doc_{doc_id}"] = {
+                "text": text,
+                "source": {
+                    "knowledge_base": row.get("knowledge_base", ""),
+                    "filename": row.get("filename", ""),
+                    "chunk_index": chunk_index,
+                },
+                "chunk_index": chunk_index,
+            }
+            index[f"_len_{doc_id}"] = len(tokens)
+            total_len += len(tokens)
+            for token, tf in Counter(tokens).items():
+                index.setdefault(token, {})[doc_id] = tf
+
+        index["_doc_count"] = max(len(rows), 1)
+        index["_avg_dl"] = max(total_len / max(len(rows), 1), 1.0)
+        self._bm25_index = index
+        self._indexed_count = len(rows)
+        logger.info("BM25 索引已就绪", chunks=len(rows))
 
     def _merge_results(
         self,

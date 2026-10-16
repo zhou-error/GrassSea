@@ -1,5 +1,4 @@
 import React from 'react';
-import { useAuthStore } from '../stores/authStore';
 
 const TopNav: React.FC = () => (
   <nav

@@ -1,12 +1,10 @@
 # ============================================================
-# GrassSea AI — Docker Compose 本地开发环境
-# 包含所有中间件服务
+# GrassSea AI — Docker Compose（个人使用：仅中间件）
+# 运维类服务（Neo4j / Jaeger / Prometheus / Grafana）已移除。
 # ============================================================
 
 services:
-  # ============================================================
-  # PostgreSQL 15 + TimescaleDB 扩展
-  # ============================================================
+  # ---------- PostgreSQL 15 + TimescaleDB ----------
   postgres:
     image: timescale/timescaledb:2.14.2-pg15
     container_name: grasssea-postgres
@@ -18,19 +16,16 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./docker-data/postgres:/var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-grasssea} -d ${POSTGRES_DB:-grasssea}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
-  # ============================================================
-  # MongoDB 7
-  # ============================================================
+  # ---------- MongoDB 7 ----------
   mongodb:
     image: mongo:7.0
     container_name: grasssea-mongodb
@@ -42,19 +37,16 @@ services:
     ports:
       - "${MONGODB_PORT:-27017}:27017"
     volumes:
-      - mongodb_data:/data/db
+      - ./docker-data/mongodb:/data/db
       - ./infrastructure/docker/mongodb/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' --quiet"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
-  # ============================================================
-  # Redis 7
-  # ============================================================
+  # ---------- Redis 7 ----------
   redis:
     image: redis:7.2-alpine
     container_name: grasssea-redis
@@ -63,18 +55,15 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - redis_data:/data
+      - ./docker-data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
-  # ============================================================
-  # Milvus 2.4+ (向量数据库) — 依赖 etcd + minio
-  # ============================================================
+  # ---------- Milvus 2.4（依赖 etcd + minio）----------
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.12
     container_name: grasssea-milvus-etcd
@@ -85,15 +74,14 @@ services:
       ETCD_QUOTA_BACKEND_BYTES: "4294967296"
       ETCD_SNAPSHOT_COUNT: "50000"
     volumes:
-      - milvus_etcd_data:/etcd
+      - ./docker-data/milvus-etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 30s
       timeout: 20s
       retries: 3
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
   milvus-minio:
     image: minio/minio:RELEASE.2024-01-16T16-07-38Z
@@ -103,22 +91,17 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
-      - milvus_minio_data:/minio_data
+      - ./docker-data/milvus-minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
     ports:
       - "9091:9001"
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
   milvus:
     image: milvusdb/milvus:v2.4.0
     container_name: grasssea-milvus
     restart: unless-stopped
+    command: milvus run standalone
     environment:
       ETCD_ENDPOINTS: milvus-etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
@@ -133,18 +116,15 @@ services:
       milvus-etcd:
         condition: service_healthy
       milvus-minio:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
       timeout: 20s
       retries: 3
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
-  # ============================================================
-  # MinIO (对象存储) — 用于业务文件存储
-  # ============================================================
+  # ---------- MinIO（业务文件存储）----------
   minio:
     image: minio/minio:latest
     container_name: grasssea-minio
@@ -156,19 +136,16 @@ services:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - minio_data:/data
+      - ./docker-data/minio:/data
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - grasssea-net
+    networks: [grasssea-net]
 
-  # ============================================================
-  # RabbitMQ 3.12+ (消息队列)
-  # ============================================================
+  # ---------- RabbitMQ（消息队列）----------
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: grasssea-rabbitmq
@@ -180,120 +157,18 @@ services:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - ./docker-data/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - grasssea-net
-
-  # ============================================================
-  # Neo4j 5.x (图数据库 — 知识图谱, 可延后)
-  # ============================================================
-  neo4j:
-    image: neo4j:5.15.0-community
-    container_name: grasssea-neo4j
-    restart: unless-stopped
-    environment:
-      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-grasssea-neo4j}
-      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
-    ports:
-      - "7474:7474"
-      - "${NEO4J_PORT:-7687}:7687"
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER:-neo4j}", "-p", "${NEO4J_PASSWORD:-grasssea-neo4j}", "RETURN 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - grasssea-net
-    profiles:
-      - full
-      - kg
-
-  # ============================================================
-  # Jaeger (链路追踪 — 可观测性)
-  # ============================================================
-  jaeger:
-    image: jaegertracing/all-in-one:1.53
-    container_name: grasssea-jaeger
-    restart: unless-stopped
-    ports:
-      - "6831:6831/udp"
-      - "16686:16686"
-      - "14268:14268"
-      - "14250:14250"
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    networks:
-      - grasssea-net
-    profiles:
-      - full
-      - observability
-
-  # ============================================================
-  # Prometheus (指标采集)
-  # ============================================================
-  prometheus:
-    image: prom/prometheus:v2.49.0
-    container_name: grasssea-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./infrastructure/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-    networks:
-      - grasssea-net
-    profiles:
-      - full
-      - observability
-
-  # ============================================================
-  # Grafana (可视化看板)
-  # ============================================================
-  grafana:
-    image: grafana/grafana:10.3.1
-    container_name: grasssea-grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: grasssea-grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./infrastructure/docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./infrastructure/docker/grafana/datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - grasssea-net
-    profiles:
-      - full
-      - observability
-
-volumes:
-  postgres_data:
-  mongodb_data:
-  redis_data:
-  milvus_etcd_data:
-  milvus_minio_data:
-  milvus_data:
-  minio_data:
-  rabbitmq_data:
-  neo4j_data:
-  neo4j_logs:
-  prometheus_data:
-  grafana_data:
+    networks: [grasssea-net]
 
 networks:
   grasssea-net:
     driver: bridge
     name: grasssea-net
+
+volumes:
+  milvus_data:

@@ -15,12 +15,8 @@ class ReportGenTool(BaseTool):
     def __init__(self): super().__init__(REPORT_GEN_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        title = params.get("title", "报告")
-        fmt = params.get("format", "pdf")
+        """如实返回未实现 — 不产出任何报告文件"""
         return {
-            "status": "completed", "title": title, "format": fmt,
-            "file_path": f"reports/{title}_{hash(title) % 10000}.{fmt}",
-            "pages": max(1, len(params.get("content", "")) // 2000),
-            "template": params.get("template", "default"),
-            "sections": ["封面", "目录", "正文", "结论", "附录"],
+            "status": "not_implemented",
+            "message": "报告生成尚未实现：未接入 Markdown→PDF 渲染器，无法产出报告文件，因此不返回任何文件路径。",
         }

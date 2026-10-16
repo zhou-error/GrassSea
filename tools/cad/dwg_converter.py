@@ -15,5 +15,8 @@ class DwgConverterTool(BaseTool):
     def __init__(self): super().__init__(DWG_CONVERTER_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        target = params.get("target_format", "pdf")
-        return {"status": "completed", "source": params.get("file_path", ""), "target_format": target, "output_path": f"converted.{target}"}
+        """如实返回未实现 — 不产出任何转换文件"""
+        return {
+            "status": "not_implemented",
+            "message": "DWG 格式转换尚未实现：未接入 DWG/DXF/PDF/PNG 转换器（如 ODA File Converter），无法产出转换文件。",
+        }

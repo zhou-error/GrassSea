@@ -1,6 +1,12 @@
-"""阻力计算工具 — Holtrop 法、ITTC 法"""
+"""阻力计算工具 — Holtrop 法、ITTC 法
 
-import numpy as np
+公式复用 agents/naval_arch_agent/agent.py 中的 ITTC 摩擦阻力系数与湿表面积估算。
+"""
+
+from __future__ import annotations
+
+import math
+
 from shared.protocols.tool import BaseTool, ToolCategory, ToolManifest
 
 RESISTANCE_MANIFEST = ToolManifest(
@@ -13,18 +19,39 @@ RESISTANCE_MANIFEST = ToolManifest(
 
 
 class ResistanceTool(BaseTool):
-    def __init__(self): super().__init__(RESISTANCE_MANIFEST)
+    """阻力与有效功率计算"""
+
+    def __init__(self) -> None:
+        super().__init__(RESISTANCE_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        L, B, T, V = params.get("L", 100), params.get("B", 15), params.get("T", 5), params.get("V_kn", 14)
-        Vs = V * 0.5144
-        Rn, Cf = Vs * L / 1.19e-6, 0.075 / (np.log10(Vs * L / 1.19e-6) - 2) ** 2
-        S, Cb = L * (2 * T + B) * (0.75 ** 0.5), 0.75
-        Rf = 0.5 * 1025 * S * Vs ** 2 * Cf / 1000
-        Rt = Rf * 1.4
+        """按 ITTC-1957 摩擦阻力系数估算总阻力与有效功率"""
+        L = float(params.get("L", params.get("length", 100.0)))       # 船长 (m)
+        B = float(params.get("B", params.get("beam", 15.0)))          # 型宽 (m)
+        T = float(params.get("T", params.get("draft", 5.0)))          # 吃水 (m)
+        V = float(params.get("V_kn", params.get("speed_kn", 14.0)))   # 航速 (kn)
+        Cb = float(params.get("Cb", params.get("cb", 0.75)))          # 方型系数
+        rho = float(params.get("water_density", 1025))                # 水密度 (kg/m³)
+
+        Vs = V * 0.5144                       # 航速 (m/s)
+        Rn = Vs * L / 1.19e-6                 # 雷诺数
+        Cf = 0.075 / (math.log10(Rn) - 2) ** 2  # ITTC 摩擦阻力系数
+        S = L * (2 * T + B) * math.sqrt(Cb)   # 湿表面积 (m²)
+        Rf = 0.5 * rho * S * Vs ** 2 * Cf / 1000   # 摩擦阻力 (kN)
+        Rt = Rf * 1.35                        # 计入剩余阻力的总阻力估算 (kN)
+        Pe = Rt * Vs                          # 有效功率 (kW)
+
         return {
-            "status": "completed", "method": "Holtrop", "speed_kn": V, "Reynolds_number": f"{Rn:.2e}",
-            "friction_coefficient": f"{Cf:.6f}", "wetted_surface_m2": round(S, 1),
-            "friction_resistance_kN": round(Rf, 1), "total_resistance_kN": round(Rt, 1),
-            "effective_power_kW": round(Rt * Vs, 1),
+            "status": "completed",
+            "inputs": {"L": L, "B": B, "T": T, "V_kn": V, "Cb": Cb, "water_density": rho},
+            "results": {
+                "method": "ITTC-1957 摩擦阻力 + 剩余阻力系数 1.35（与 NavalArchAgent 同一套公式）",
+                "speed_m_s": round(Vs, 3),
+                "Reynolds_number": f"{Rn:.2e}",
+                "friction_coefficient": f"{Cf:.6f}",
+                "wetted_surface_m2": round(S, 1),
+                "friction_resistance_kN": round(Rf, 1),
+                "total_resistance_kN": round(Rt, 1),
+                "effective_power_kW": round(Pe, 1),
+            },
         }

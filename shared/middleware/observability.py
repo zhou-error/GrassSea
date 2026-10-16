@@ -68,4 +68,4 @@ def setup_observability(app: FastAPI) -> None:
         logger.warning("OpenTelemetry not available, skipping instrumentation")
 
 
-@app_metrics = None  # Placeholder for Prometheus metrics endpoint
+app_metrics = None  # Placeholder: Prometheus 指标端点（尚未实现）

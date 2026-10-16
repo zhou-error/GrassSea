@@ -8,45 +8,163 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(err);
-  }
+  (err) => Promise.reject(err)
 );
-
-// Auth
-export const loginApi = (username: string, password: string) =>
-  api.post('/auth/login', { username, password });
 
 // Chat
 export const chatApi = (message: string, sessionId?: string) =>
   api.post('/chat', { message, session_id: sessionId });
 
 // RAG
-export const ragQueryApi = (query: string) =>
-  api.post('/rag/query', { query });
+export interface RagDocumentSource {
+  [key: string]: unknown;
+}
 
-export const uploadDocumentApi = (file: File, kb: string) => {
+export interface RagDocument {
+  document_id: string;
+  filename: string;
+  knowledge_base: string;
+  chunks: number;
+  status: string;
+}
+
+export interface RagDocumentListResponse {
+  total: number;
+  documents: RagDocument[];
+}
+
+export interface RagUploadResponse {
+  document_id: string;
+  filename: string;
+  status: string;
+  chunks_count: number;
+}
+
+export interface RagDeleteResponse {
+  document_id: string;
+  deleted_chunks: number;
+  status: string;
+}
+
+export interface RagSourceChunk {
+  chunk_id: string;
+  text: string;
+  score: number;
+  source: RagDocumentSource;
+  chunk_index: number;
+}
+
+export interface RagQueryResponse {
+  query: string;
+  answer: string;
+  sources: RagSourceChunk[];
+  retrieval_time_ms: number;
+  generation_time_ms: number;
+}
+
+export const ragQueryApi = (query: string, topK = 5, knowledgeBases?: string[]) =>
+  api.post<RagQueryResponse>('/rag/query', {
+    query,
+    top_k: topK,
+    ...(knowledgeBases && knowledgeBases.length > 0 ? { knowledge_bases: knowledgeBases } : {}),
+  });
+
+export const listDocumentsApi = (kb?: string) =>
+  api.get<RagDocumentListResponse>('/rag/documents', {
+    params: kb ? { knowledge_base: kb } : undefined,
+  });
+
+export const deleteDocumentApi = (documentId: string) =>
+  api.delete<RagDeleteResponse>(`/rag/documents/${encodeURIComponent(documentId)}`);
+
+/** 上传进度回调：整型 0-100 */
+export type UploadProgressHandler = (percent: number) => void;
+
+export const uploadDocumentApi = (file: File, kb: string, onProgress?: UploadProgressHandler) => {
   const fd = new FormData();
   fd.append('file', file);
-  return api.post(`/rag/documents?knowledge_base=${encodeURIComponent(kb)}`, fd, {
+  return api.post<RagUploadResponse>(`/rag/documents?knowledge_base=${encodeURIComponent(kb)}`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: onProgress
+      ? (e) => {
+          const total = typeof e.total === 'number' && e.total > 0 ? e.total : e.loaded;
+          if (!total || total <= 0) return;
+          const percent = Math.round((e.loaded * 100) / total);
+          onProgress(Math.max(0, Math.min(100, percent)));
+        }
+      : undefined,
   });
 };
 
-// Task
+// Task / Agent
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface TaskSummary {
+  task_id: string;
+  title: string;
+  intent: string;
+  status: TaskStatus;
+  progress: number;
+  steps_total: number;
+  created_at: string;
+  session_id: string;
+}
+
+export interface TaskListResponse {
+  total: number;
+  tasks: TaskSummary[];
+}
+
+export interface TaskStep {
+  step_id: string;
+  action: string;
+  description: string;
+  agent_id?: string;
+  tool_ids?: string[];
+  dependencies?: string[];
+}
+
+export interface TaskResult {
+  /** step_id -> 该步骤产出的原始结果，结构由后端决定 */
+  results: Record<string, unknown>;
+  completed: string[];
+  failed: string[];
+  skipped: string[];
+  /** 后端预格式化的“一步一行”可读摘要；可能不存在 */
+  summary?: string[];
+}
+
+export interface TaskStatusResponse {
+  task_id: string;
+  status: string;
+  progress: number;
+  result: TaskResult | null;
+  error: string | null;
+  steps: TaskStep[];
+}
+
+export interface AgentInfo {
+  agent_id: string;
+  name: string;
+  role: string;
+  status: string;
+  version: string;
+  capabilities: string[];
+  last_heartbeat: number;
+}
+
+export interface AgentListResponse {
+  total: number;
+  agents: AgentInfo[];
+}
+
+export const listTasksApi = () => api.get<TaskListResponse>('/tasks');
+
 export const getTaskStatusApi = (taskId: string) =>
-  api.get(`/task/${taskId}/status`);
+  api.get<TaskStatusResponse>(`/task/${encodeURIComponent(taskId)}/status`);
+
+export const listAgentsApi = () => api.get<AgentListResponse>('/agents');
 
 export default api;

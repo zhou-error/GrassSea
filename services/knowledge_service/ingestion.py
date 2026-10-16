@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import Optional
 
 from shared.utils.config import Settings
+from shared.utils.embedding import get_embedder
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -45,9 +46,19 @@ class DocumentIngestionPipeline:
         self._embedding_client = None
 
     async def initialize(self) -> None:
-        """初始化 Embedding 客户端"""
-        # 使用 OpenAI 兼容的 Embedding API
-        # 生产环境可替换为本地 BGE 模型
+        """初始化 Embedding 客户端和 Milvus 连接"""
+        from pymilvus import connections
+
+        try:
+            connections.connect(
+                alias="default",
+                host=self.settings.MILVUS_HOST,
+                port=self.settings.MILVUS_PORT,
+            )
+            logger.info("Milvus connected for ingestion")
+        except Exception as e:
+            logger.warning("Milvus connection failed for ingestion", error=str(e))
+
         logger.info(
             "Document ingestion pipeline initialized",
             chunk_size=self.chunk_size,
@@ -244,41 +255,9 @@ class DocumentIngestionPipeline:
 
         使用配置的 EMBEDDING_MODEL（默认 text-embedding-3-large）。
         """
-        # 生产环境调用 OpenAI / 本地 BGE 模型
-        # 此处提供简化实现
-        logger.debug("Generating embeddings", count=len(texts))
-
-        # 如果 API key 未配置，使用占位向量（开发用）
-        if not self.settings.OPENAI_API_KEY:
-            # 使用简单的 hash-based 占位向量
-            import hashlib
-            embeddings = []
-            for text in texts:
-                h = hashlib.sha256(text.encode()).digest()
-                vec = [float(b) / 255.0 for b in h[:self.settings.EMBEDDING_DIM]]
-                # 补齐维度
-                if len(vec) < self.settings.EMBEDDING_DIM:
-                    vec += [0.0] * (self.settings.EMBEDDING_DIM - len(vec))
-                embeddings.append(vec[:self.settings.EMBEDDING_DIM])
-            return embeddings
-
-        # 调用 OpenAI Embedding API
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.settings.OPENAI_BASE_URL}/embeddings",
-                headers={
-                    "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.settings.EMBEDDING_MODEL,
-                    "input": texts,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            return [item["embedding"] for item in data["data"]]
+        embedder = get_embedder(self.settings)
+        logger.debug("Generating embeddings", count=len(texts), backend=embedder.name)
+        return await embedder.embed(texts)
 
     async def _insert_to_milvus(
         self,
@@ -301,6 +280,7 @@ class DocumentIngestionPipeline:
         if not utility.has_collection(collection_name):
             fields = [
                 FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
+                FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=100),
                 FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
                 FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=len(embeddings[0])),
                 FieldSchema(name="knowledge_base", dtype=DataType.VARCHAR, max_length=256),
@@ -320,16 +300,33 @@ class DocumentIngestionPipeline:
             collection.load()
         else:
             collection = Collection(name=collection_name)
+            existing_dim = next(
+                (int(f.params["dim"]) for f in collection.schema.fields if f.name == "embedding"),
+                None,
+            )
+            if existing_dim is not None and existing_dim != len(embeddings[0]):
+                raise RuntimeError(
+                    f"Milvus 集合 '{collection_name}' 当前维度为 {existing_dim}，"
+                    f"而向量后端输出 {len(embeddings[0])} 维。"
+                    "更换 embedding 模型后必须重建该集合后重新入库。"
+                )
+            if "document_id" not in {f.name for f in collection.schema.fields}:
+                raise RuntimeError(
+                    f"Milvus 集合 '{collection_name}' 是旧 schema（缺少 document_id 字段），"
+                    "无法支持文档列表与删除。请先执行 "
+                    "uv run python scripts/reset_knowledge_base.py 重建集合，再重新上传文档。"
+                )
             collection.load()
 
         # 插入数据
         entities = [
-            [c.chunk_id for c in chunks],           # id
-            [c.text for c in chunks],                 # text
-            embeddings,                                # embedding
-            [c.metadata.get("knowledge_base", "") for c in chunks],  # knowledge_base
-            [c.metadata.get("filename", "") for c in chunks],        # filename
-            [c.chunk_index for c in chunks],          # chunk_index
+            [c.chunk_id for c in chunks],                             # id
+            [c.metadata.get("document_id", "") for c in chunks],      # document_id
+            [c.text for c in chunks],                                 # text
+            embeddings,                                               # embedding
+            [c.metadata.get("knowledge_base", "") for c in chunks],   # knowledge_base
+            [c.metadata.get("filename", "") for c in chunks],         # filename
+            [c.chunk_index for c in chunks],                          # chunk_index
         ]
 
         collection.insert(entities)

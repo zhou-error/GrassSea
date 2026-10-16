@@ -15,25 +15,8 @@ class RegCheckTool(BaseTool):
     def __init__(self): super().__init__(REG_CHECK_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
-        design_params = params.get("design_params", {})
-        codes = params.get("regulation_codes", ["CCS"])
-        violations, suggestions, passed = [], [], []
-
-        checks = {
-            "bulkhead_spacing": {"min": 600, "max": 3500, "unit": "mm", "clause": "CCS §2.5.3"},
-            "web_frame_spacing": {"min": 500, "max": 4000, "unit": "mm", "clause": "CCS §2.5.4"},
-            "hull_plate_thickness": {"min": 6, "max": 40, "unit": "mm", "clause": "CCS §3.2.1"},
+        """如实返回未实现 — 不给出任何合规判定"""
+        return {
+            "status": "not_implemented",
+            "message": "规范合规审查尚未实现：未接入规范条文知识库/RAG，无法给出条文级判定，因此不返回 pass/violations 结论。",
         }
-
-        for param, value in design_params.items():
-            check = checks.get(param)
-            if check and isinstance(value, (int, float)):
-                if value < check["min"]:
-                    violations.append({"parameter": param, "value": value, "requirement": f">= {check['min']}{check['unit']}", "clause": check["clause"], "severity": "error"})
-                    suggestions.append({"parameter": param, "suggestion": f"增大 {param} 至 ≥{check['min']}{check['unit']}", "priority": "high"})
-                elif value > check["max"]:
-                    violations.append({"parameter": param, "value": value, "requirement": f"<= {check['max']}{check['unit']}", "clause": check["clause"], "severity": "warning"})
-                else:
-                    passed.append(param)
-
-        return {"status": "completed", "pass": len(violations) == 0, "violations": violations, "suggestions": suggestions, "passed_checks": len(passed) + len(violations), "codes_checked": codes}

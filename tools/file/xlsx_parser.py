@@ -15,9 +15,8 @@ class XlsxParserTool(BaseTool):
     def __init__(self): super().__init__(XLSX_PARSER_MANIFEST)
 
     async def execute(self, params: dict, context: dict) -> dict:
+        """如实返回未实现 — 不返回任何表头或数据行"""
         return {
-            "status": "completed", "file": params.get("file_path", ""),
-            "sheet": params.get("sheet_name", "Sheet1"),
-            "headers": ["站号", "半宽", "吃水", "纵剖线高"], "rows": 21,
-            "data_sample": [{"station": i, "half_breadth": 5.0 + i * 0.3, "draft": 4.0 + i * 0.05} for i in range(5)],
+            "status": "not_implemented",
+            "message": "型值表解析尚未实现：表格读取与型值结构化流程未接通，无法返回表头与数据行。",
         }

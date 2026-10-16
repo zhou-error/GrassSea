@@ -1,7 +1,4 @@
-"""对话服务 (Chat Service) — 前端 API 网关
-
-提供认证 + 路由转发到各后端服务。
-"""
+"""对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。"""
 
 from __future__ import annotations
 
@@ -12,10 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 
-from services.chat_service.auth import router as auth_router
+import os
+
 from services.chat_service.config_api import router as config_router
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging
+
+# Docker 环境中使用服务名，本地开发用 localhost
+AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8002")
+KNOWLEDGE_SERVICE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://localhost:8003")
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -25,6 +27,11 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     setup_logging(level="DEBUG" if settings.APP_DEBUG else "INFO")
     logger.info("Chat Service starting...")
+
+    # 将加密存储的 API Key 推送到下游服务（带重试）
+    from services.chat_service.config_api import _propagate_all_secrets
+    await _propagate_all_secrets()
+
     yield
 
 
@@ -38,8 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册认证路由
-app.include_router(auth_router)
+
 app.include_router(config_router)
 
 
@@ -56,7 +62,7 @@ async def proxy_chat(request: Request):
     body = await request.json()
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            f"http://localhost:8002/chat", json=body,
+            f"{AGENT_SERVICE_URL}/chat", json=body,
         )
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
@@ -67,7 +73,7 @@ async def proxy_rag_query(request: Request):
     body = await request.json()
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            f"http://localhost:8003/rag/query", json=body,
+            f"{KNOWLEDGE_SERVICE_URL}/rag/query", json=body,
         )
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
@@ -87,9 +93,46 @@ async def proxy_rag_upload(request: Request):
                 data[key] = str(value)
 
         resp = await client.post(
-            f"http://localhost:8003/rag/documents",
+            f"{KNOWLEDGE_SERVICE_URL}/rag/documents",
+            params=dict(request.query_params),
             data=data, files=files,
         )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+@app.get("/rag/documents")
+async def proxy_rag_documents(request: Request):
+    """转发文档列表到知识库服务 (8003)"""
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.get(
+            f"{KNOWLEDGE_SERVICE_URL}/rag/documents",
+            params=dict(request.query_params),
+        )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+@app.delete("/rag/documents/{document_id}")
+async def proxy_rag_delete(document_id: str):
+    """转发文档删除到知识库服务 (8003)"""
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.delete(
+            f"{KNOWLEDGE_SERVICE_URL}/rag/documents/{document_id}",
+        )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+@app.get("/tasks")
+async def proxy_tasks():
+    """转发任务列表到智能体编排服务 (8002)"""
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{AGENT_SERVICE_URL}/tasks")
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+@app.get("/agents")
+async def proxy_agents():
+    """转发智能体列表到智能体编排服务 (8002)"""
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{AGENT_SERVICE_URL}/agents")
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
 
@@ -97,5 +140,5 @@ async def proxy_rag_upload(request: Request):
 async def proxy_task_status(task_id: str):
     """转发任务状态查询到智能体编排服务 (8002)"""
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(f"http://localhost:8002/task/{task_id}/status")
+        resp = await client.get(f"{AGENT_SERVICE_URL}/task/{task_id}/status")
         return JSONResponse(content=resp.json(), status_code=resp.status_code)

@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
@@ -63,41 +63,6 @@ def generate_presigned_url(
     return f"http://minio:9000/{bucket}/{object_path}?expires={int(expiry.timestamp())}&sig={signature}"
 
 
-# ==== 认证中间件 ====
-
-class AuthMiddleware(BaseHTTPMiddleware):
-    """JWT 认证 + RBAC 鉴权中间件"""
-
-    PUBLIC_PATHS = {"/health", "/version", "/docs", "/openapi.json", "/redoc", "/api/auth/login"}
-
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path in self.PUBLIC_PATHS or request.url.path.startswith("/ws"):
-            return await call_next(request)
-
-        token = request.headers.get("Authorization", "").replace("Bearer ", "")
-
-        if not token:
-            api_key = request.headers.get("X-API-Key")
-            if api_key and api_key in API_KEYS:
-                request.state.user_id = API_KEYS[api_key]["user_id"]
-                request.state.role = "api_user"
-                return await call_next(request)
-            raise HTTPException(status_code=401, detail="Missing authentication token")
-
-        try:
-            from jose import jwt
-            from shared.utils.config import get_settings
-            settings = get_settings()
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-            request.state.user_id = payload.get("sub")
-            request.state.role = payload.get("role", "engineer")
-            request.state.username = payload.get("username", "")
-        except Exception:
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
-
-        return await call_next(request)
-
-
 # ==== 审计日志中间件 ====
 
 class AuditMiddleware(BaseHTTPMiddleware):
@@ -105,11 +70,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        user_id = getattr(request.state, "user_id", "anonymous")
 
         logger.info(
             "audit_log",
-            user_id=user_id,
             method=request.method,
             path=request.url.path,
             status=response.status_code,
@@ -146,6 +109,5 @@ def setup_security(app: FastAPI) -> None:
         max_age=3600,
     )
     app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(AuthMiddleware)
     app.add_middleware(AuditMiddleware)
     logger.info("Security middleware configured")
