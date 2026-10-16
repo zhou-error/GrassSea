@@ -35,8 +35,86 @@ export interface ChatResponse {
   tool_trace?: ToolCallTrace[];
 }
 
-export const chatApi = (message: string, sessionId?: string) =>
-  api.post<ChatResponse>('/chat', { message, session_id: sessionId });
+/** 附件描述符（由 POST /attachments 返回） */
+export interface AttachmentDescriptor {
+  attachment_id: string;
+  filename: string;
+  media_type: string;
+  size: number;
+  kind: 'text' | 'pdf' | 'table' | 'image' | 'binary';
+  chars: number;
+  text: string;
+  truncated: boolean;
+  note: string;
+}
+
+export interface AttachmentLimits {
+  max_attachment_bytes: number;
+  max_text_chars_per_file: number;
+  image_understood: boolean;
+  note: string;
+}
+
+export const chatApi = (
+  message: string,
+  sessionId?: string,
+  attachments: AttachmentDescriptor[] = []
+) =>
+  api.post<ChatResponse>('/chat', {
+    message,
+    session_id: sessionId,
+    ...(attachments.length > 0 ? { attachments } : {}),
+  });
+
+// ---- 附件上传 ----
+
+export const uploadAttachmentApi = (
+  file: File,
+  onProgress?: UploadProgressHandler
+): Promise<{ data: AttachmentDescriptor }> => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<AttachmentDescriptor>('/attachments', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180000,
+    onUploadProgress: onProgress
+      ? (e) => {
+          const total = typeof e.total === 'number' && e.total > 0 ? e.total : e.loaded;
+          if (!total || total <= 0) return;
+          onProgress(Math.max(0, Math.min(100, Math.round((e.loaded * 100) / total))));
+        }
+      : undefined,
+  });
+};
+
+export const attachmentLimitsApi = () => api.get<AttachmentLimits>('/attachments/limits');
+
+// ---- 桌面模式与工作文件夹 ----
+
+export interface DesktopStatus {
+  desktop_mode: boolean;
+  workspace_selected: boolean;
+  workspace_root: string;
+}
+
+export interface WorkspaceInfo {
+  selected: boolean;
+  root: string;
+  tree: string[];
+  truncated: boolean;
+  cancelled?: boolean;
+}
+
+export const desktopStatusApi = () => api.get<DesktopStatus>('/desktop/status');
+
+export const workspaceInfoApi = () => api.get<WorkspaceInfo>('/workspace');
+
+export const workspaceSetApi = (path: string) =>
+  api.post<WorkspaceInfo>('/workspace/set', { path });
+
+/** 弹出系统原生文件夹对话框（仅桌面模式） */
+export const workspaceSelectApi = () =>
+  api.post<WorkspaceInfo>('/workspace/select', {}, { timeout: 180000 });
 
 // RAG
 export interface RagDocumentSource {

@@ -11,6 +11,7 @@ import httpx
 
 import asyncio
 import os
+from pathlib import Path
 
 from services.chat_service.attachments import MAX_TEXT_CHARS, process_upload
 from shared.utils import workspace as ws
@@ -47,6 +48,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _strip_api_prefix(request: Request, call_next):
+    """桌面模式下剥离 /api 前缀
+
+    Docker 形态由 nginx 去掉 /api 再转发；桌面模式没有 nginx，
+    前端仍以 /api 为前缀调用，因此这里补上同样的处理。
+    """
+    if settings.DESKTOP_MODE and request.scope.get("path", "").startswith("/api/"):
+        request.scope["path"] = request.scope["path"][4:]
+        raw = request.scope.get("raw_path")
+        if raw:
+            request.scope["raw_path"] = raw[4:]
+    return await call_next(request)
 
 
 app.include_router(config_router)
@@ -303,3 +319,31 @@ async def proxy_task_status(task_id: str):
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(f"{AGENT_SERVICE_URL}/task/{task_id}/status")
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+# ============================================================
+# 前端静态托管（桌面模式）
+# Docker 形态下前端由 nginx 托管，这里只是为了 app.launcher --desktop 时
+# 能在同一端口上同时提供界面与 API。必须放在所有 API 路由之后注册。
+# ============================================================
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if (_FRONTEND_DIST / "index.html").exists():
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    _ASSETS = _FRONTEND_DIST / "assets"
+    if _ASSETS.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_ASSETS)), name="frontend-assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        """SPA 前端路由回退：静态文件命中则返回，否则一律回到 index.html"""
+        candidate = _FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_FRONTEND_DIST / "index.html"))
+
+    logger.info("前端静态资源已挂载", dist=str(_FRONTEND_DIST))
+else:
+    logger.info("未发现前端构建产物（frontend/dist），仅提供 API")
