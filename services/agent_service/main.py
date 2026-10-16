@@ -22,6 +22,7 @@ from services.agent_service.fsm import SessionFSM, SessionState
 from services.agent_service.registry import AgentRegistry
 from services.agent_service.executor import TaskExecutor
 from services.agent_service.tool_loop import ToolCallLoop
+from services.chat_service.attachments import build_context
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging, set_trace_id
 from tools.base.registry import ToolRegistry
@@ -78,7 +79,9 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     user_id: Optional[str] = None
-    attachments: list[str] = Field(default_factory=list)
+    # 附件描述符列表（来自 chat_service 的 POST /attachments）
+    # 结构：{attachment_id, filename, media_type, size, kind, chars, text, truncated, note}
+    attachments: list[dict] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -233,32 +236,73 @@ def _describe_plan(task: dict) -> str:
     return "\n".join(lines)
 
 
+def _merge_notes(answer: str, notes: list[str]) -> str:
+    """把附件的如实说明追加到回答末尾（不放正文里，避免模型改写或忽略）"""
+    if not notes:
+        return answer
+    lines = "\n".join(f"- {n}" for n in notes)
+    return f"{answer}\n\n---\n> ℹ️ 附件说明\n{lines}"
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """对话入口 — 意图识别 → 路由 → 执行"""
+    """对话入口 — 附件注入 → 意图识别 → 路由 → 执行"""
     trace_id = str(uuid.uuid4())[:8]
     set_trace_id(trace_id)
     session_id = request.session_id or f"sess_{trace_id}"
 
+    # 0. 附件注入：把正文拼进消息，并收集需要如实告知用户的说明
+    attachment_context, attachment_notes = build_context(request.attachments)
+    if attachment_context:
+        message = f"{request.message}\n\n===== 附件内容 =====\n{attachment_context}"
+        logger.info(
+            "Attachments injected",
+            count=len(request.attachments),
+            context_chars=len(attachment_context),
+            notes=len(attachment_notes),
+        )
+    else:
+        message = request.message
+
+    has_attachment_text = any((a.get("text") or "").strip() for a in request.attachments)
+
     # 1. 意图识别
-    intent_result = await intent_classifier.classify(request.message)
+    intent_result = await intent_classifier.classify(message)
     logger.info("Intent classified", intent=intent_result.intent_type, confidence=intent_result.confidence, session=session_id)
 
     # 2. 按意图路由
     if intent_result.intent_type == IntentType.CHITCHAT:
-        answer = await _handle_chitchat(request.message)
-        return ChatResponse(session_id=session_id, intent="chitchat", answer=answer)
+        answer = await _handle_chitchat(message)
+        return ChatResponse(
+            session_id=session_id,
+            intent="chitchat",
+            answer=_merge_notes(answer, attachment_notes),
+        )
 
     elif intent_result.intent_type == IntentType.KNOWLEDGE_QUERY:
-        result = await _handle_knowledge_query(request.message, session_id)
-        return ChatResponse(session_id=session_id, intent="knowledge_query", answer=result["answer"], sources=result.get("sources", []))
+        # 用户附了材料时以附件为准直接作答，不做向量检索
+        if has_attachment_text:
+            logger.info("Attachments present, answering from attachments", session=session_id)
+            answer = await _handle_with_attachments(message)
+            return ChatResponse(
+                session_id=session_id,
+                intent="knowledge_query",
+                answer=_merge_notes(answer, attachment_notes),
+            )
+        result = await _handle_knowledge_query(message, session_id)
+        return ChatResponse(
+            session_id=session_id,
+            intent="knowledge_query",
+            answer=_merge_notes(result["answer"], attachment_notes),
+            sources=result.get("sources", []),
+        )
 
     elif intent_result.intent_type in (IntentType.TOOL_CALL, IntentType.PROFESSIONAL_TASK):
         # 3.1 优先尝试「模型自主决定调用工具」
         #     模型会拿到工具清单与 JSON Schema，自行选择调用哪个、传什么参数，
         #     结果回灌后给出最终回答；全过程记录在 tool_trace 中。
         loop_result = (
-            await tool_call_loop.run(request.message, session_id, request.user_id)
+            await tool_call_loop.run(message, session_id, request.user_id)
             if tool_call_loop
             else {"ok": False, "reason": "tool_call_loop_unavailable"}
         )
@@ -266,7 +310,7 @@ async def chat(request: ChatRequest):
             return ChatResponse(
                 session_id=session_id,
                 intent=intent_result.intent_type,
-                answer=loop_result.get("answer") or "",
+                answer=_merge_notes(loop_result.get("answer") or "", attachment_notes),
                 tool_trace=loop_result.get("tool_trace") or [],
             )
 
@@ -276,7 +320,7 @@ async def chat(request: ChatRequest):
             reason=loop_result.get("reason"),
             session=session_id,
         )
-        task = await task_planner.plan(request.message, intent_result)
+        task = await task_planner.plan(message, intent_result)
         # 异步执行
         await task_executor.execute_async(task, session_id, request.user_id)
         intent_label = _INTENT_LABELS.get(
@@ -295,7 +339,7 @@ async def chat(request: ChatRequest):
         )
 
     elif intent_result.intent_type == IntentType.SUB_AGENT_ORCHESTRATION:
-        task = await task_planner.plan_multi_agent(request.message, intent_result)
+        task = await task_planner.plan_multi_agent(message, intent_result)
         await task_executor.execute_async(task, session_id, request.user_id)
         return ChatResponse(
             session_id=session_id,
@@ -310,8 +354,12 @@ async def chat(request: ChatRequest):
         )
 
     # 兜底
-    answer = await _handle_chitchat(request.message)
-    return ChatResponse(session_id=session_id, intent="unknown", answer=answer)
+    answer = await _handle_chitchat(message)
+    return ChatResponse(
+        session_id=session_id,
+        intent="unknown",
+        answer=_merge_notes(answer, attachment_notes),
+    )
 
 
 @app.get("/task/{task_id}/status", response_model=TaskStatusResponse)
@@ -356,6 +404,40 @@ async def _handle_chitchat(message: str) -> str:
             f"{settings.DEEPSEEK_BASE_URL}/v1/chat/completions",
             headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
             json={"model": "deepseek-chat", "messages": [{"role": "user", "content": message}], "max_tokens": 1024},
+        )
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+async def _handle_with_attachments(message: str) -> str:
+    """基于用户提供的附件直接作答（不走向量检索）
+
+    用户上传材料时，材料本身就是权威上下文；再去做知识库检索只会得到
+    "根据现有资料无法回答"，因此这里直接让模型阅读附件内容作答。
+    """
+    import httpx
+
+    if not settings.DEEPSEEK_API_KEY:
+        return "已收到附件，但当前未配置大模型 API Key，无法解析附件内容。"
+
+    system = (
+        "你是 GrassSea AI，专注于船舶与海洋工程领域。"
+        "用户提供了附件，请**仅依据附件内容**回答问题，并在引用时注明来自哪个附件。"
+        "附件中若没有相关信息，如实说明，不要编造。"
+    )
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"{settings.DEEPSEEK_BASE_URL}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
+            json={
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": message},
+                ],
+                "max_tokens": 3000,
+                "temperature": 0.3,
+            },
         )
         data = resp.json()
         return data["choices"][0]["message"]["content"]

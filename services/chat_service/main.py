@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 
 import os
 
+from services.chat_service.attachments import MAX_TEXT_CHARS, process_upload
 from services.chat_service.config_api import router as config_router
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging
@@ -134,6 +135,52 @@ async def proxy_agents():
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(f"{AGENT_SERVICE_URL}/agents")
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+#: 单个附件大小上限（字节）——防止误传超大文件撑爆内存与上下文
+MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
+
+@app.post("/attachments")
+async def upload_attachment(file: UploadFile = File(...)):
+    """接收单个附件：落盘 + 提取正文，返回描述符
+
+    前端拿到描述符后，在 POST /chat 的 attachments 字段里回传，
+    由智能体编排服务注入模型上下文。图片不会被解析（除非配置了视觉模型）。
+    """
+    content = await file.read()
+    if len(content) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"附件过大：{len(content)} 字节，上限 {MAX_ATTACHMENT_BYTES} 字节",
+        )
+    if not content:
+        raise HTTPException(status_code=400, detail="附件内容为空")
+
+    attachment = process_upload(
+        file.filename or "upload.bin",
+        content,
+        file.content_type or "",
+    )
+    logger.info(
+        "Attachment received",
+        filename=attachment.filename,
+        kind=attachment.kind,
+        size=attachment.size,
+        chars=attachment.chars,
+    )
+    return attachment.to_dict()
+
+
+@app.get("/attachments/limits")
+async def attachment_limits():
+    """附件限制说明，供前端展示提示文案"""
+    return {
+        "max_attachment_bytes": MAX_ATTACHMENT_BYTES,
+        "max_text_chars_per_file": MAX_TEXT_CHARS,
+        "image_understood": False,
+        "note": "当前模型不支持图片理解，图片仅接收与保存，不会被解析。",
+    }
 
 
 @app.get("/tools")
