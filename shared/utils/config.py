@@ -98,6 +98,16 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # --- Milvus 2.4+ ---
+    # --- 向量存储后端 ---
+    # local = 内置 SQLite + numpy 精确检索，零外部依赖（桌面/个人使用默认）
+    # milvus = Milvus 2.4，适合服务器部署与超大规模
+    VECTOR_BACKEND: str = "local"
+    # 向量库数据文件路径（留空则使用 <DATA_DIR>/vectorstore/knowledge.sqlite3）
+    VECTOR_STORE_PATH: str = ""
+    # 本地数据目录（留空则使用 <项目根>/data）；桌面版会指向用户可写目录
+    DATA_DIR: str = ""
+
+    # --- Milvus（仅 VECTOR_BACKEND=milvus 时使用）---
     MILVUS_HOST: str = "localhost"
     MILVUS_PORT: int = 19530
 
