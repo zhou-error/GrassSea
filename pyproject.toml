@@ -85,7 +85,7 @@ sqlalchemy.url = "postgresql+asyncpg://grasssea:grasssea@localhost:5432/grasssea
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["shared*", "services*", "agents*", "tools*", "scripts*"]
+include = ["shared*", "services*", "agents*", "tools*", "scripts*", "app*"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

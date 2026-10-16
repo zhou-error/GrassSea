@@ -199,8 +199,8 @@ GrassSea/
 |---|---|---|
 | 向量后端 | `VECTOR_BACKEND=local`（内置 SQLite + numpy） | `VECTOR_BACKEND=milvus`（Docker 中默认） |
 | 外部中间件 | **零**（不需要 PostgreSQL / MongoDB / Redis / RabbitMQ / Milvus / MinIO） | PostgreSQL · MongoDB · Redis · RabbitMQ · Milvus · MinIO |
-| 启动方式 | 单进程启动器 + 原生窗口（规划中） | `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d` |
-| 数据落盘 | `<项目根>/data/`（向量库、模型缓存、密钥） | `./docker-data/`（compose 卷） |
+| 启动方式 | **`uv run python -m app.launcher`**（单进程跑 4 个服务）+ 原生窗口（P3 规划中） | `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d` |
+| 数据落盘 | `<项目根>/data/`（向量库、模型缓存、密钥；已 gitignore） | `./docker-data/`（compose 卷） |
 | 适用场景 | 个人在 Windows 上直接使用 | 服务器部署、多副本、超大规模向量 |
 
 **为什么桌面形态不需要那些中间件**（依据第 8 章的审计结论）：
@@ -213,6 +213,13 @@ GrassSea/
 | RabbitMQ / Celery | ❌ 仅配置项，无代码引用 |
 | Milvus | ✅ **唯一真正在用的**——由新的可插拔向量后端替代 |
 | MinIO | ❌ 仅 `scripts/init_minio.py` 使用 |
+
+**单进程启动器**（`app/launcher.py`，227 行）：
+- 一个 Python 进程内用 4 个 asyncio 任务各起一个 uvicorn，监听 127.0.0.1:8001–8004
+- 跨服务地址自动由容器名改写为回环地址，且**跟随端口配置**（改 `CHAT_SERVICE_PORT` 等会同步改写内部 URL）
+- 统一接管 SIGINT/SIGTERM（四个 uvicorn 实例均关闭自动信号处理，避免互相覆盖）
+- `--check` 只做导入与配置自检，不监听端口
+- **服务代码零改动**，四个服务仍是独立 ASGI 应用；删除 `app/` 不影响 Docker 部署
 
 > `shared/models/database.py` 已**全面惰性化**：导入 ORM 模型不再创建 PostgreSQL 引擎，
 > 外部驱动（asyncpg / motor / redis / pymilvus）改为函数内延迟导入，
