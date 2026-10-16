@@ -50,6 +50,13 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# 虚拟环境（务必忽略，切勿提交）
+.venv/
+venv/
+
+# 第三方工具数据（曾误提交，含其他项目数据）
+.freebuff/
+
 # Environment
 .env
 .env.local
