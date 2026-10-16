@@ -2,7 +2,7 @@
 
 > **文档定位**：让新加入的工程师在不通读全部源码的前提下，准确理解本项目的整体结构、模块边界、调用链路、接口契约与核心功能。
 >
-> **代码基线**：`F:\GrassSea`，分支 `develop`（默认分支 `master`）；代码 **125 个文件 / 12,021 行**（Python 108 / 9,277 行，TS·TSX 17 / 2,744 行）。
+> **代码基线**：`F:\GrassSea`，分支 `feature/desktop-native`（自 `develop` 分出）；代码 **129 个文件 / 12590 行**（Python 112 / 9846 行，TS·TSX 17 / 2744 行）。
 > **配套文件**：[`ARCHITECTURE-APPENDIX-INDEX.md`](./ARCHITECTURE-APPENDIX-INDEX.md) —— 全文件与符号索引（由脚本机械生成，含每个函数/类的**行号与签名**）。
 > **最近更新**：2026-10-16（新增「模型自主工具调用」能力后同步）
 >
@@ -166,6 +166,7 @@ GrassSea/
 │   ├── protocols/              #   Agent / Tool 抽象协议与注册中心接口
 │   ├── utils/                  #   config(206行) · logging · secrets · embedding(219行)
 │   ├── models/                 #   数据模型：postgres / timescale / mongodb / repository / alembic
+│   ├── vectorstore/            #   **向量存储抽象层**：base(协议) · local(内置SQLite) · milvus(服务器)
 │   └── middleware/             #   security（RBAC/HMAC/审计）· observability（OTel）
 ├── frontend/                   # React 18 SPA
 │   └── src/                    #   App.tsx(4 路由) · components(6) · pages(4) · stores(2) · api(1)
@@ -190,6 +191,33 @@ GrassSea/
 
 > **已删除的历史文件**（勿在文档中引用）：`.github/workflows/ci.yml`、`infrastructure/k3s/*`、`docker-compose.full.yml`、`start.bat`/`stop.bat`、`services/*-service`（连字符空目录）。
 
+## 1.5 双形态运行（桌面 / 服务器）
+
+本项目支持两种运行形态，**同一套代码**通过配置切换，互不干扰：
+
+| | 🖥️ 桌面形态（新增） | 🐳 服务器形态（原样保留） |
+|---|---|---|
+| 向量后端 | `VECTOR_BACKEND=local`（内置 SQLite + numpy） | `VECTOR_BACKEND=milvus`（Docker 中默认） |
+| 外部中间件 | **零**（不需要 PostgreSQL / MongoDB / Redis / RabbitMQ / Milvus / MinIO） | PostgreSQL · MongoDB · Redis · RabbitMQ · Milvus · MinIO |
+| 启动方式 | 单进程启动器 + 原生窗口（规划中） | `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d` |
+| 数据落盘 | `<项目根>/data/`（向量库、模型缓存、密钥） | `./docker-data/`（compose 卷） |
+| 适用场景 | 个人在 Windows 上直接使用 | 服务器部署、多副本、超大规模向量 |
+
+**为什么桌面形态不需要那些中间件**（依据第 8 章的审计结论）：
+
+| 组件 | 运行时使用情况 |
+|---|---|
+| PostgreSQL | ❌ 四个服务都不初始化；ORM 仅由 `scripts/` 与 Alembic 使用 |
+| MongoDB | ❌ 无任何写入路径 |
+| Redis | ❌ `init_redis()` 四个服务均未调用 |
+| RabbitMQ / Celery | ❌ 仅配置项，无代码引用 |
+| Milvus | ✅ **唯一真正在用的**——由新的可插拔向量后端替代 |
+| MinIO | ❌ 仅 `scripts/init_minio.py` 使用 |
+
+> `shared/models/database.py` 已**全面惰性化**：导入 ORM 模型不再创建 PostgreSQL 引擎，
+> 外部驱动（asyncpg / motor / redis / pymilvus）改为函数内延迟导入，
+> 因此桌面形态可以完全不安装、不连接这些组件。
+
 ---
 
 # 2. 模块与文件依赖关系
@@ -198,7 +226,7 @@ GrassSea/
 
 | # | 模块 | 路径 | 职责边界 | 规模 |
 |---|---|---|---|---|
-| M1 | 共享内核 | `shared/` | 配置、日志、密钥、向量化、数据模型、协议、中间件。**不含业务逻辑** | 32 文件 / 2,292 行 |
+| M1 | 共享内核 | `shared/` | 配置、日志、密钥、向量化、**向量存储抽象**、数据模型、协议、中间件。**不含业务逻辑** | 38 文件 / 3013 行 |
 | M2 | 模型网关 | `services/model_gateway/` | 多模型路由、OpenAI 兼容接口、Token 统计 | 4 / 721 |
 | M3 | 对话服务 | `services/chat_service/` | BFF 代理 + 配置热更新 API | 3 / 450 |
 | M4 | 智能体编排 | `services/agent_service/` | 意图识别、任务规划、FSM、DAG 执行、Agent/工具注册、**模型自主工具调用** | 8 / 2,022 |
@@ -283,7 +311,8 @@ graph LR
 | `services/agent_service/executor.py` | `agent_service/registry`、`shared.models.postgres.task`、`shared.protocols.agent`、`tools.base.registry` | `agent_service/main.py` |
 | `services/agent_service/planner.py` | `agent_service/intent`、`shared.utils.config` | `agent_service/main.py` |
 | `services/agent_service/tool_loop.py` | `shared.protocols.tool`、`shared.utils.config`、`model_gateway`（HTTP） | `agent_service/main.py`（lifespan + /chat） |
-| `services/knowledge_service/retrieval.py` | `shared.utils.embedding`、`pymilvus` | `knowledge_service/main.py`、`generator.py` ⚠️ 待确认 |
+| `services/knowledge_service/retrieval.py` | `shared.utils.embedding`、`shared.vectorstore` | `knowledge_service/main.py`、`generator.py` |
+| `shared/vectorstore/__init__.py` | `vectorstore.base`、按配置动态导入 `local` / `milvus` | `knowledge_service` 的 ingestion 与 retrieval |
 | `services/chat_service/config_api.py` | `shared.utils.secrets` | `chat_service/main.py` |
 | `frontend/src/api/index.ts` | `axios` | 全部 4 个页面 + `DAGPanel` + `ToolTraceCard` |
 
@@ -781,7 +810,9 @@ sequenceDiagram
 | `get_pg_session()` | `database.py:42` | FastAPI 依赖注入；异常时 rollback | 自动 commit |
 | `get_mongo_db()` / `get_redis()` | `database.py:77` / `109` | 取已初始化客户端 | 未初始化时抛 `RuntimeError` |
 | `BaseRepository` 及 3 个实现 | `shared/models/repository/` | 项目 / 任务 / 会话仓储 | ⚠️ 四个服务均未调用，属预留 |
-| Milvus 集合 `grasssea_knowledge` | `ingestion.py:262`、`retrieval.py:300` | 向量存取；字段 `id / document_id / text / embedding / knowledge_base / filename / chunk_index` | 维度由 embedding 后端决定 |
+| **`VectorStore` 抽象** | `shared/vectorstore/base.py` | 向量存取的统一协议：`upsert / search / fetch_all / delete_document / count / close` | 上层（ingestion / retrieval）**只依赖此协议** |
+| `LocalVectorStore`（默认） | `shared/vectorstore/local.py` | SQLite 表 `chunks` + numpy 精确余弦检索 | 零外部依赖；`VECTOR_BACKEND=local` |
+| `MilvusVectorStore` | `shared/vectorstore/milvus.py` | Milvus 集合 `grasssea_knowledge`；字段 `id / document_id / text / embedding / knowledge_base / filename / chunk_index` | `VECTOR_BACKEND=milvus` |
 
 ## 4.5 第三方集成接口
 
@@ -920,6 +951,9 @@ sequenceDiagram
 | | `LOCAL_EMBEDDING_MODEL` / `LOCAL_EMBEDDING_CACHE` / `HF_ENDPOINT` | BAAI/bge-small-zh-v1.5 / 空 / https://hf-mirror.com | 本地向量 |
 | 服务发现 | `MODEL_GATEWAY_URL` / `AGENT_SERVICE_URL` / `KNOWLEDGE_SERVICE_URL` | localhost:8004/8002/8003 | 跨服务调用 |
 | 密钥 | `SECRETS_DIR` | 空 → 自动探测 `docker-data/secrets` | `secrets.py:33` |
+| **向量后端** | `VECTOR_BACKEND` | local（代码默认）/ milvus（Docker 默认） | 决定 RAG 底层存储；桌面用 local，服务器用 milvus |
+| | `VECTOR_STORE_PATH` | 空 | 向量库文件路径；空则用 `<DATA_DIR>/vectorstore/knowledge.sqlite3` |
+| | `DATA_DIR` | 空 | 本地数据目录；空则用 `<项目根>/data` |
 | **工具调用** | `TOOL_CALLING_ENABLED` | true | 是否允许模型自主调用工具 |
 | | `TOOL_CALL_MAX_ROUNDS` | 6 | 最多几轮「思考 → 调用 → 回灌」 |
 | | `TOOL_CALL_TIMEOUT_SECONDS` | 120 | 循环总超时 |
@@ -955,6 +989,29 @@ sequenceDiagram
 | BM25 稀疏索引 | `retrieval.py` 内存字典 | 进程级 | 懒构建，数据变更后 `_rebuild_sparse_index()` |
 | Embedder 单例 | `get_embedder()`（`embedding.py:199`） | 进程级 | 模型只加载一次 |
 | 前端状态 | `chatStore.ts` / `uiStore.ts`（zustand） | 页面会话 | 无持久化 |
+
+### 向量存储（可插拔）
+
+`shared/vectorstore/` 把「向量存取」与具体后端解耦，上层 RAG 流程完全后端无关：
+
+~~~mermaid
+graph LR
+  ING["knowledge_service/ingestion.py"] --> VS["vectorstore/__init__.py<br/>get_vector_store()"]
+  RET["knowledge_service/retrieval.py"] --> VS
+  VS -->|"VECTOR_BACKEND=local"| L["LocalVectorStore<br/>SQLite + numpy 精确余弦"]
+  VS -->|"VECTOR_BACKEND=milvus"| M["MilvusVectorStore<br/>Milvus 2.4 + COSINE/IVF_FLAT"]
+  L --> F1[("data/vectorstore/knowledge.sqlite3")]
+  M --> F2[("Milvus collection<br/>grasssea_knowledge")]
+~~~
+
+| 后端 | 持久化 | 检索方式 | 依赖 | 适用 |
+|---|---|---|---|---|
+| `local`（默认） | 单个 SQLite 文件，向量以 float32 小端字节串存储 | numpy 暴力余弦，个人规模毫秒级、**精确无近似** | 仅 `sqlite3`(标准库) + `numpy` | 桌面 / 个人使用 |
+| `milvus` | Milvus 集合 | ANN 近似检索（IVF_FLAT） | pymilvus + Milvus 服务 | 服务器 / 大规模 |
+
+**保持不变的部分**：BM25 稀疏索引、`dense×0.7 + sparse×0.3` 融合、重排、生成与降级，全部逻辑一行未改，只把数据来源从 Milvus 换成协议调用。
+
+**维度一致性**：两种后端都会在向量维度与索引不一致时抛出带中文指引的 `RuntimeError`（提示执行 `scripts/reset_knowledge_base.py` 后重新入库）。
 
 ## 8.3 数据库表与代码实体映射
 
@@ -1005,6 +1062,7 @@ sequenceDiagram
 | D2 | **文档解析依赖已 import 但逻辑未实现** | `pypdf2` / `pymupdf` / `openpyxl` | 🟡 低 | 属规划中能力，建议在 `pyproject.toml` 加注释说明 |
 | D3 | **无进程内循环依赖** | 脚本抽取全部 import 边未发现环 | ✅ 良好 | 保持 |
 | D4 | **零反向依赖** | `shared/` 不 import 任何业务模块 | ✅ 良好 | 保持 |
+| D5 | **pymilvus ORM 风格 API 已弃用** | 实测告警：`Collection.search` / `connections.disconnect` 标记为将在 PyMilvus 3.1 移除 | 🟡 低 | 仅影响 `VECTOR_BACKEND=milvus`；升级 pymilvus 前需把 `milvus.py` 改用 `MilvusClient`。内置 local 后端不受影响 |
 
 ## 9.3 接口层面
 

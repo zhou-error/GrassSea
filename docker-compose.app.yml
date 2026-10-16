@@ -217,6 +217,9 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-grasssea}
       - POSTGRES_DB=${POSTGRES_DB:-grasssea}
       # Milvus
+      # 向量后端：Docker 模式默认沿用 Milvus（与既有数据保持一致）
+      # 桌面模式默认 local（内置 SQLite，零外部依赖），见 shared/utils/config.py
+      - VECTOR_BACKEND=${VECTOR_BACKEND:-milvus}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       # MinIO

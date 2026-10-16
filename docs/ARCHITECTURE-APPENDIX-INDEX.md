@@ -4,13 +4,13 @@
 
 | 项 | 值 |
 |---|---|
-| 生成时间 | 2026-10-16 14:37:57 |
-| 代码文件数 | 125 |
-| 代码总行数 | 12021 |
-| 类数量 | 111 |
-| 提取符号数（含多行签名） | 569 |
+| 生成时间 | 2026-10-16 15:22:47 |
+| 代码文件数 | 129 |
+| 代码总行数 | 12590 |
+| 类数量 | 115 |
+| 提取符号数（含多行签名） | 610 |
 | HTTP 路由装饰器 | 35 |
-| 登记文件总数 | 166 |
+| 登记文件总数 | 170 |
 
 **范围声明**：已排除 `node_modules`、`.venv`、`docker-data`、`.git`、`.freebuff`、`dist`、`__pycache__`、`.uv-cache`；
 `教学文件/`、`ProductDesign/`、`AI开发提示词/`、`项目开发日记/` 为非代码资产，见正文第 10 章。
@@ -56,7 +56,7 @@
 | 32 | `scripts/backup_db.py` | 117 | 0 | 5 | 数据库备份脚本 — 每日全量 + WAL 归档 |
 | 33 | `scripts/init_db.py` | 73 | 0 | 3 | 数据库一键建表脚本（个人开发环境） |
 | 34 | `scripts/init_minio.py` | 90 | 0 | 2 | MinIO bucket 初始化脚本 |
-| 35 | `scripts/reset_knowledge_base.py` | 46 | 0 | 1 | 重建 Milvus 知识库集合 |
+| 35 | `scripts/reset_knowledge_base.py` | 76 | 0 | 3 | 重建知识库索引 |
 | 36 | `scripts/seed_data.py` | 96 | 0 | 3 | 数据库种子脚本（幂等，可重复执行） |
 | 37 | `services/agent_service/__init__.py` | 2 | 0 | 0 | — |
 | 38 | `services/agent_service/executor.py` | 537 | 1 | 15 | 任务执行引擎 |
@@ -71,10 +71,10 @@
 | 47 | `services/chat_service/main.py` | 156 | 0 | 11 | 对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。 |
 | 48 | `services/knowledge_service/__init__.py` | 2 | 0 | 0 | — |
 | 49 | `services/knowledge_service/generator.py` | 171 | 1 | 7 | 答案生成模块 |
-| 50 | `services/knowledge_service/ingestion.py` | 336 | 2 | 12 | 文档预处理流水线 |
+| 50 | `services/knowledge_service/ingestion.py` | 262 | 2 | 11 | 文档预处理流水线 |
 | 51 | `services/knowledge_service/main.py` | 332 | 7 | 9 | 知识库服务 (Knowledge Service) |
 | 52 | `services/knowledge_service/reranker.py` | 115 | 1 | 5 | 重排序模块 |
-| 53 | `services/knowledge_service/retrieval.py` | 429 | 2 | 15 | 混合检索模块 |
+| 53 | `services/knowledge_service/retrieval.py` | 334 | 2 | 14 | 混合检索模块 |
 | 54 | `services/model_gateway/__init__.py` | 2 | 0 | 0 | — |
 | 55 | `services/model_gateway/main.py` | 362 | 5 | 8 | 模型网关服务 (Model Gateway) |
 | 56 | `services/model_gateway/router.py` | 409 | 3 | 11 | 模型路由器 |
@@ -86,7 +86,7 @@
 | 62 | `shared/models/__init__.py` | 1 | 0 | 0 | — |
 | 63 | `shared/models/alembic/env.py` | 80 | 0 | 4 | Alembic 环境配置 |
 | 64 | `shared/models/alembic/versions/__init__.py` | 2 | 0 | 0 | — |
-| 65 | `shared/models/database.py` | 134 | 1 | 9 | 数据库连接管理模块 |
+| 65 | `shared/models/database.py` | 185 | 1 | 13 | 数据库连接管理模块（全部惰性化） |
 | 66 | `shared/models/mongodb/__init__.py` | 2 | 0 | 0 | — |
 | 67 | `shared/models/mongodb/collections.py` | 130 | 1 | 0 | MongoDB 集合定义与索引 |
 | 68 | `shared/models/postgres/__init__.py` | 23 | 0 | 0 | — |
@@ -109,44 +109,48 @@
 | 85 | `shared/protocols/agent.py` | 117 | 6 | 11 | 智能体基础协议定义 |
 | 86 | `shared/protocols/tool.py` | 115 | 5 | 12 | 工具基础协议定义 |
 | 87 | `shared/utils/__init__.py` | 1 | 0 | 0 | — |
-| 88 | `shared/utils/config.py` | 218 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
+| 88 | `shared/utils/config.py` | 228 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
 | 89 | `shared/utils/embedding.py` | 219 | 4 | 14 | 统一的文本向量化模块 |
 | 90 | `shared/utils/logging.py` | 114 | 0 | 6 | GrassSea AI — 结构化日志模块 |
 | 91 | `shared/utils/secrets.py` | 155 | 0 | 7 | API Key 加密存储模块 |
-| 92 | `tests/__init__.py` | 2 | 0 | 0 | — |
-| 93 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
-| 94 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
-| 95 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
-| 96 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
-| 97 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
-| 98 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
-| 99 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
-| 100 | `tools/__init__.py` | 2 | 0 | 0 | — |
-| 101 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
-| 102 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
-| 103 | `tools/bootstrap.py` | 78 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
-| 104 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
-| 105 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
-| 106 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
-| 107 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
-| 108 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
-| 109 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
-| 110 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
-| 111 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
-| 112 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
-| 113 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
-| 114 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
-| 115 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
-| 116 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
-| 117 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
-| 118 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
-| 119 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
-| 120 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
-| 121 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
-| 122 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
-| 123 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
-| 124 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
-| 125 | `练习/test_async.py` | 55 | 0 | 5 | — |
+| 92 | `shared/vectorstore/__init__.py` | 40 | 0 | 1 | 向量存储抽象层 —— 按配置选择后端 |
+| 93 | `shared/vectorstore/base.py` | 99 | 2 | 9 | 向量存储协议与数据结构 |
+| 94 | `shared/vectorstore/local.py` | 268 | 1 | 13 | 内置向量存储 —— SQLite 持久化 + numpy 精确余弦检索 |
+| 95 | `shared/vectorstore/milvus.py` | 240 | 1 | 10 | Milvus 向量存储后端 |
+| 96 | `tests/__init__.py` | 2 | 0 | 0 | — |
+| 97 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
+| 98 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
+| 99 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
+| 100 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
+| 101 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
+| 102 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
+| 103 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
+| 104 | `tools/__init__.py` | 2 | 0 | 0 | — |
+| 105 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
+| 106 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
+| 107 | `tools/bootstrap.py` | 78 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
+| 108 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
+| 109 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
+| 110 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
+| 111 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
+| 112 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
+| 113 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
+| 114 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
+| 115 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
+| 116 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
+| 117 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
+| 118 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
+| 119 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
+| 120 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
+| 121 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
+| 122 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
+| 123 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
+| 124 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
+| 125 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
+| 126 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
+| 127 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
+| 128 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
+| 129 | `练习/test_async.py` | 55 | 0 | 5 | — |
 
 ---
 
@@ -515,13 +519,15 @@
 
 ### `scripts/reset_knowledge_base.py`
 
-- **行数**：46　**类**：0　**函数/方法**：1
-- **职责**：重建 Milvus 知识库集合
-- **内部依赖**：`shared.utils.config`
+- **行数**：76　**类**：0　**函数/方法**：3
+- **职责**：重建知识库索引
+- **内部依赖**：`shared.utils.config`、`shared.vectorstore`、`shared.vectorstore.local`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 28 | function | `main` | `() → None` |
+| 29 | function | `reset_local` | `(db_path: Path) → None` |
+| 43 | function | `reset_milvus` | `(host: str, port: int) → None` |
+| 59 | function | `main` | `() → None` |
 
 ### `scripts/seed_data.py`
 
@@ -766,26 +772,25 @@
 
 ### `services/knowledge_service/ingestion.py`
 
-- **行数**：336　**类**：2　**函数/方法**：12
+- **行数**：262　**类**：2　**函数/方法**：11
 - **职责**：文档预处理流水线
-- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`
+- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`、`shared.vectorstore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 21 | class | `DocumentChunk` | `` |
-| 23 | method | `DocumentChunk.__init__` | `(self, chunk_id: str, text: str, metadata: dict, chunk_index: int,)` |
-| 36 | class | `DocumentIngestionPipeline` | `` |
-| 42 | method | `DocumentIngestionPipeline.__init__` | `(self, settings: Settings)` |
-| 48 | method | `DocumentIngestionPipeline.initialize` | `(self) → None` |
-| 69 | method | `DocumentIngestionPipeline.close` | `(self) → None` |
-| 73 | method | `DocumentIngestionPipeline.process_and_index` | `(self, document_id: str, filename: str, content: bytes, content_type: str, knowledge_base: str = "项目知识库",) → int` |
-| 122 | method | `DocumentIngestionPipeline._parse_document` | `(self, content: bytes, content_type: str) → str` |
-| 136 | method | `DocumentIngestionPipeline._parse_pdf` | `(self, content: bytes) → str` |
-| 157 | method | `DocumentIngestionPipeline._clean_text` | `(self, text: str) → str` |
-| 167 | method | `DocumentIngestionPipeline._chunk_text` | `(self, text: str, chunk_size: int, chunk_overlap: int, document_id: str, filename: str, knowledge_base: str,) → list[DocumentChunk]` |
-| 239 | method | `DocumentIngestionPipeline._index_chunks` | `(self, chunks: list[DocumentChunk]) → None` |
-| 253 | method | `DocumentIngestionPipeline._generate_embeddings` | `(self, texts: list[str]) → list[list[float]]` |
-| 262 | method | `DocumentIngestionPipeline._insert_to_milvus` | `(self, chunks: list[DocumentChunk], embeddings: list[list[float]],) → None` |
+| 22 | class | `DocumentChunk` | `` |
+| 24 | method | `DocumentChunk.__init__` | `(self, chunk_id: str, text: str, metadata: dict, chunk_index: int,)` |
+| 37 | class | `DocumentIngestionPipeline` | `` |
+| 43 | method | `DocumentIngestionPipeline.__init__` | `(self, settings: Settings)` |
+| 51 | method | `DocumentIngestionPipeline.initialize` | `(self) → None` |
+| 63 | method | `DocumentIngestionPipeline.close` | `(self) → None` |
+| 67 | method | `DocumentIngestionPipeline.process_and_index` | `(self, document_id: str, filename: str, content: bytes, content_type: str, knowledge_base: str = "项目知识库",) → int` |
+| 116 | method | `DocumentIngestionPipeline._parse_document` | `(self, content: bytes, content_type: str) → str` |
+| 130 | method | `DocumentIngestionPipeline._parse_pdf` | `(self, content: bytes) → str` |
+| 151 | method | `DocumentIngestionPipeline._clean_text` | `(self, text: str) → str` |
+| 161 | method | `DocumentIngestionPipeline._chunk_text` | `(self, text: str, chunk_size: int, chunk_overlap: int, document_id: str, filename: str, knowledge_base: str,) → list[DocumentChunk]` |
+| 233 | method | `DocumentIngestionPipeline._index_chunks` | `(self, chunks: list[DocumentChunk]) → None` |
+| 254 | method | `DocumentIngestionPipeline._generate_embeddings` | `(self, texts: list[str]) → list[list[float]]` |
 
 ### `services/knowledge_service/main.py`
 
@@ -829,29 +834,28 @@
 
 ### `services/knowledge_service/retrieval.py`
 
-- **行数**：429　**类**：2　**函数/方法**：15
+- **行数**：334　**类**：2　**函数/方法**：14
 - **职责**：混合检索模块
-- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`
+- **内部依赖**：`shared.utils.config`、`shared.utils.embedding`、`shared.utils.logging`、`shared.vectorstore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 23 | class | `SearchResult` | `` |
-| 25 | method | `SearchResult.__init__` | `(self, chunk_id: str, text: str, score: float, source: dict \| None = None, chunk_index: int = 0,)` |
-| 40 | class | `HybridRetriever` | `` |
-| 46 | method | `HybridRetriever.__init__` | `(self, settings: Settings)` |
-| 56 | method | `HybridRetriever.initialize` | `(self) → None` |
-| 86 | method | `HybridRetriever.close` | `(self) → None` |
-| 94 | method | `HybridRetriever.hybrid_search` | `(self, query: str, top_k: int = 20, knowledge_bases: list[str] \| None = None,) → list[SearchResult]` |
-| 128 | method | `HybridRetriever._dense_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
-| 183 | method | `HybridRetriever._sparse_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
-| 238 | method | `HybridRetriever._generate_query_embedding` | `(self, query: str) → list[float]` |
-| 246 | method | `HybridRetriever.list_documents` | `(self, knowledge_base: str \| None = None) → list[dict]` |
-| 284 | method | `HybridRetriever.delete_document` | `(self, document_id: str) → int` |
-| 300 | method | `HybridRetriever._ensure_collection` | `(self) → None` |
-| 320 | method | `HybridRetriever._ensure_sparse_index` | `(self) → None` |
-| 332 | method | `HybridRetriever._rebuild_sparse_index` | `(self) → None` |
-| 376 | method | `HybridRetriever._merge_results` | `(self, dense: list[SearchResult], sparse: list[SearchResult],) → list[SearchResult]` |
-| 416 | method | `HybridRetriever._tokenize` | `(self, text: str) → list[str]` |
+| 24 | class | `SearchResult` | `` |
+| 26 | method | `SearchResult.__init__` | `(self, chunk_id: str, text: str, score: float, source: dict \| None = None, chunk_index: int = 0,)` |
+| 41 | class | `HybridRetriever` | `` |
+| 47 | method | `HybridRetriever.__init__` | `(self, settings: Settings)` |
+| 57 | method | `HybridRetriever.initialize` | `(self) → None` |
+| 62 | method | `HybridRetriever.close` | `(self) → None` |
+| 66 | method | `HybridRetriever.hybrid_search` | `(self, query: str, top_k: int = 20, knowledge_bases: list[str] \| None = None,) → list[SearchResult]` |
+| 97 | method | `HybridRetriever._dense_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
+| 126 | method | `HybridRetriever._sparse_search` | `(self, query: str, top_k: int, knowledge_bases: list[str] \| None,) → list[SearchResult]` |
+| 181 | method | `HybridRetriever._generate_query_embedding` | `(self, query: str) → list[float]` |
+| 189 | method | `HybridRetriever.list_documents` | `(self, knowledge_base: str \| None = None) → list[dict]` |
+| 218 | method | `HybridRetriever.delete_document` | `(self, document_id: str) → int` |
+| 230 | method | `HybridRetriever._ensure_sparse_index` | `(self) → None` |
+| 244 | method | `HybridRetriever._rebuild_sparse_index` | `(self) → None` |
+| 281 | method | `HybridRetriever._merge_results` | `(self, dense: list[SearchResult], sparse: list[SearchResult],) → list[SearchResult]` |
+| 321 | method | `HybridRetriever._tokenize` | `(self, text: str) → list[str]` |
 
 ### `services/model_gateway/__init__.py`
 
@@ -992,22 +996,26 @@
 
 ### `shared/models/database.py`
 
-- **行数**：134　**类**：1　**函数/方法**：9
-- **职责**：数据库连接管理模块
+- **行数**：185　**类**：1　**函数/方法**：13
+- **职责**：数据库连接管理模块（全部惰性化）
 - **内部依赖**：`shared.utils.config`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 37 | class | `Base` | `(DeclarativeBase)` |
-| 42 | function | `get_pg_session` | `() → AsyncGenerator[AsyncSession, None]` |
-| 60 | function | `init_mongodb` | `() → None` |
-| 69 | function | `close_mongodb` | `() → None` |
-| 77 | function | `get_mongo_db` | `() → AsyncIOMotorDatabase` |
-| 90 | function | `init_redis` | `() → None` |
-| 101 | function | `close_redis` | `() → None` |
-| 109 | function | `get_redis` | `() → Redis` |
-| 122 | function | `init_milvus` | `() → None` |
-| 131 | function | `close_milvus` | `() → None` |
+| 35 | class | `Base` | `(DeclarativeBase)` |
+| 48 | function | `_build_pg_engine` | `() → Any` |
+| 60 | function | `get_pg_engine` | `() → Any` |
+| 68 | function | `get_pg_session_factory` | `() → Any` |
+| 82 | function | `__getattr__` | `(name: str) → Any` |
+| 95 | function | `get_pg_session` | `() → AsyncGenerator[Any, None]` |
+| 113 | function | `init_mongodb` | `() → None` |
+| 123 | function | `close_mongodb` | `() → None` |
+| 132 | function | `get_mongo_db` | `() → "AsyncIOMotorDatabase"` |
+| 145 | function | `init_redis` | `() → None` |
+| 154 | function | `close_redis` | `() → None` |
+| 162 | function | `get_redis` | `() → Any` |
+| 173 | function | `init_milvus` | `() → None` |
+| 180 | function | `close_milvus` | `() → None` |
 
 ### `shared/models/mongodb/__init__.py`
 
@@ -1291,7 +1299,7 @@
 
 ### `shared/utils/config.py`
 
-- **行数**：218　**类**：1　**函数/方法**：13
+- **行数**：228　**类**：1　**函数/方法**：13
 - **职责**：GrassSea AI — 统一配置管理模块
 - **内部依赖**：`shared.utils.secrets`
 
@@ -1303,14 +1311,14 @@
 | 68 | method | `Settings.POSTGRES_SYNC_URI` | `(self) → str` |
 | 82 | method | `Settings.MONGODB_URI` | `(self) → str` |
 | 95 | method | `Settings.REDIS_URI` | `(self) → str` |
-| 105 | method | `Settings.MILVUS_URI` | `(self) → str` |
-| 117 | method | `Settings.MINIO_URI` | `(self) → str` |
-| 128 | method | `Settings.RABBITMQ_URI` | `(self) → str` |
-| 138 | method | `Settings.NEO4J_URI` | `(self) → str` |
-| 143 | method | `Settings.CELERY_BROKER_URL` | `(self) → str` |
-| 147 | method | `Settings.CELERY_RESULT_BACKEND` | `(self) → str` |
-| 194 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
-| 199 | function | `get_settings` | `() → Settings` |
+| 115 | method | `Settings.MILVUS_URI` | `(self) → str` |
+| 127 | method | `Settings.MINIO_URI` | `(self) → str` |
+| 138 | method | `Settings.RABBITMQ_URI` | `(self) → str` |
+| 148 | method | `Settings.NEO4J_URI` | `(self) → str` |
+| 153 | method | `Settings.CELERY_BROKER_URL` | `(self) → str` |
+| 157 | method | `Settings.CELERY_RESULT_BACKEND` | `(self) → str` |
+| 204 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
+| 209 | function | `get_settings` | `() → Settings` |
 
 ### `shared/utils/embedding.py`
 
@@ -1369,6 +1377,79 @@
 | 115 | function | `save_secrets` | `(secrets: dict[str, str]) → None` |
 | 140 | function | `update_secret` | `(key: str, value: str) → None` |
 | 152 | function | `is_sensitive_key` | `(key: str) → bool` |
+
+### `shared/vectorstore/__init__.py`
+
+- **行数**：40　**类**：0　**函数/方法**：1
+- **职责**：向量存储抽象层 —— 按配置选择后端
+- **内部依赖**：`shared.utils.config`、`shared.vectorstore.base`、`shared.vectorstore.local`、`shared.vectorstore.milvus`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 22 | function | `get_vector_store` | `(settings: Settings) → VectorStore` |
+
+### `shared/vectorstore/base.py`
+
+- **行数**：99　**类**：2　**函数/方法**：9
+- **职责**：向量存储协议与数据结构
+- **内部依赖**：（无）
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 19 | class | `VectorRecord` | `` |
+| 34 | class | `VectorStore` | `(ABC)` |
+| 47 | method | `VectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 53 | method | `VectorStore.available` | `(self) → bool` |
+| 60 | method | `VectorStore.initialize` | `(self) → None` |
+| 64 | method | `VectorStore.close` | `(self) → None` |
+| 70 | method | `VectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 80 | method | `VectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 89 | method | `VectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 93 | method | `VectorStore.delete_document` | `(self, document_id: str) → int` |
+| 97 | method | `VectorStore.count` | `(self) → int` |
+
+### `shared/vectorstore/local.py`
+
+- **行数**：268　**类**：1　**函数/方法**：13
+- **职责**：内置向量存储 —— SQLite 持久化 + numpy 精确余弦检索
+- **内部依赖**：`shared.utils.logging`、`shared.vectorstore.base`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 41 | class | `LocalVectorStore` | `(VectorStore)` |
+| 46 | method | `LocalVectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 59 | method | `LocalVectorStore.resolve_db_path` | `(settings) → Path` |
+| 68 | method | `LocalVectorStore._resolve_db_path` | `(self) → Path` |
+| 73 | method | `LocalVectorStore._connect` | `(self) → sqlite3.Connection` |
+| 81 | method | `LocalVectorStore.initialize` | `(self) → None` |
+| 96 | method | `LocalVectorStore.close` | `(self) → None` |
+| 104 | method | `LocalVectorStore._invalidate_cache` | `(self) → None` |
+| 109 | method | `LocalVectorStore._load_matrix` | `(self) → None` |
+| 144 | method | `LocalVectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 185 | method | `LocalVectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 227 | method | `LocalVectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 244 | method | `LocalVectorStore.delete_document` | `(self, document_id: str) → int` |
+| 258 | method | `LocalVectorStore.count` | `(self) → int` |
+
+### `shared/vectorstore/milvus.py`
+
+- **行数**：240　**类**：1　**函数/方法**：10
+- **职责**：Milvus 向量存储后端
+- **内部依赖**：`shared.utils.logging`、`shared.vectorstore.base`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 19 | class | `MilvusVectorStore` | `(VectorStore)` |
+| 24 | method | `MilvusVectorStore.__init__` | `(self, settings, collection_name: str = "grasssea_knowledge") → None` |
+| 31 | method | `MilvusVectorStore.initialize` | `(self) → None` |
+| 59 | method | `MilvusVectorStore.close` | `(self) → None` |
+| 70 | method | `MilvusVectorStore._read_dim` | `(collection) → int \| None` |
+| 79 | method | `MilvusVectorStore._ensure_collection` | `(self)` |
+| 99 | method | `MilvusVectorStore.upsert` | `(self, records: list[VectorRecord], embeddings: list[list[float]]) → int` |
+| 157 | method | `MilvusVectorStore.search` | `(self, embedding: list[float], top_k: int, knowledge_bases: list[str] \| None = None,) → list[VectorRecord]` |
+| 199 | method | `MilvusVectorStore.fetch_all` | `(self, limit: int = 16384) → list[VectorRecord]` |
+| 224 | method | `MilvusVectorStore.delete_document` | `(self, document_id: str) → int` |
+| 232 | method | `MilvusVectorStore.count` | `(self) → int` |
 
 ### `tests/__init__.py`
 
