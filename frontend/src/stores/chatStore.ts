@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ToolCallTrace } from '../api';
 
 interface Message {
   id: string;
@@ -7,6 +8,8 @@ interface Message {
   timestamp: number;
   sources?: Array<{ chunk_id: string; text: string; source: Record<string, string> }>;
   taskId?: string;
+  /** 模型自主调用工具的轨迹（仅工具调用路径会产生） */
+  toolTrace?: ToolCallTrace[];
 }
 
 interface ChatState {
@@ -15,6 +18,7 @@ interface ChatState {
   streaming: boolean;
   addMessage: (msg: Message) => void;
   appendContent: (id: string, chunk: string) => void;
+  setToolTrace: (id: string, trace: ToolCallTrace[]) => void;
   setSessionId: (id: string) => void;
   setStreaming: (v: boolean) => void;
   clearMessages: () => void;
@@ -30,6 +34,10 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: s.messages.map((m) =>
         m.id === id ? { ...m, content: m.content + chunk } : m
       ),
+    })),
+  setToolTrace: (id, trace) =>
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === id ? { ...m, toolTrace: trace } : m)),
     })),
   setSessionId: (id) => set({ sessionId: id }),
   setStreaming: (v) => set({ streaming: v }),

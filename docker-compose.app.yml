@@ -156,6 +156,11 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-grasssea}
       # 模型网关
       - MODEL_GATEWAY_URL=http://model-gateway:8004
+      # 工具调用（由模型自主决定调用哪个工具）
+      - TOOL_CALLING_ENABLED=${TOOL_CALLING_ENABLED:-true}
+      - TOOL_CALL_MAX_ROUNDS=${TOOL_CALL_MAX_ROUNDS:-6}
+      - TOOL_CALL_TIMEOUT_SECONDS=${TOOL_CALL_TIMEOUT_SECONDS:-120}
+      - TOOL_CALL_EXPOSE_UNIMPLEMENTED=${TOOL_CALL_EXPOSE_UNIMPLEMENTED:-false}
       # LLM API Keys
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}

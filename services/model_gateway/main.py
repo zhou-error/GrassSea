@@ -59,8 +59,17 @@ app = FastAPI(
 # ---- 请求/响应模型 ----
 
 class ChatMessage(BaseModel):
+    """OpenAI 风格消息
+
+    扩展字段用于 function calling 往返：
+    - assistant 返回 tool_calls 时 content 可为空
+    - role="tool" 的消息需带 tool_call_id 指回是哪次调用
+    """
     role: str = "user"
-    content: str
+    content: Optional[str] = None
+    name: Optional[str] = None
+    tool_calls: Optional[list[dict]] = None
+    tool_call_id: Optional[str] = None
 
 
 class ChatCompletionRequest(BaseModel):
@@ -71,6 +80,9 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = Field(default=4096, ge=1, le=128000)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     user: Optional[str] = None
+    # --- function calling ---
+    tools: Optional[list[dict]] = None
+    tool_choice: Optional[str] = None
 
 
 class ChatCompletionChoice(BaseModel):
@@ -230,10 +242,19 @@ async def _sync_response(
     trace_id: str,
     start_time: float,
 ) -> ChatCompletionResponse:
-    """非流式响应"""
+    """非流式响应（透传真实消息与工具定义）"""
     try:
-        completion = await model_router.complete(route_result, stream=False)
+        completion = await model_router.complete(
+            route_result,
+            stream=False,
+            messages=[m.model_dump(exclude_none=True) for m in request.messages],
+            tools=request.tools,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+        )
         content = completion.get("content", "")
+        tool_calls = completion.get("tool_calls") or []
+        finish_reason = completion.get("finish_reason") or ("tool_calls" if tool_calls else "stop")
     except Exception as e:
         logger.error("LLM call failed", error=str(e))
         raise HTTPException(status_code=502, detail=f"LLM service error: {str(e)}")
@@ -261,8 +282,12 @@ async def _sync_response(
         model=route_result.model,
         choices=[
             ChatCompletionChoice(
-                message=ChatMessage(role="assistant", content=content),
-                finish_reason="stop",
+                message=ChatMessage(
+                    role="assistant",
+                    content=content or None,
+                    tool_calls=tool_calls or None,
+                ),
+                finish_reason=finish_reason,
             )
         ],
         usage=ChatUsage(
@@ -281,7 +306,10 @@ async def _stream_response(
 ):
     """流式响应生成器 (SSE)"""
     try:
-        async for chunk in model_router.complete_stream(route_result):
+        async for chunk in model_router.complete_stream(
+            route_result,
+            messages=[m.model_dump(exclude_none=True) for m in request.messages],
+        ):
             content = chunk.get("content", "")
             if content:
                 data = {

@@ -14,8 +14,29 @@ api.interceptors.response.use(
 );
 
 // Chat
+
+/** 模型自主调用一次工具的记录 */
+export interface ToolCallTrace {
+  round: number;
+  tool: string;
+  arguments: Record<string, unknown>;
+  status: string;
+  elapsed_ms: number;
+  message?: string | null;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  intent: string;
+  answer: string;
+  task_id?: string | null;
+  sources?: RagSourceChunk[];
+  /** 仅当模型自主调用工具时非空 */
+  tool_trace?: ToolCallTrace[];
+}
+
 export const chatApi = (message: string, sessionId?: string) =>
-  api.post('/chat', { message, session_id: sessionId });
+  api.post<ChatResponse>('/chat', { message, session_id: sessionId });
 
 // RAG
 export interface RagDocumentSource {
@@ -166,5 +187,28 @@ export const getTaskStatusApi = (taskId: string) =>
   api.get<TaskStatusResponse>(`/task/${encodeURIComponent(taskId)}/status`);
 
 export const listAgentsApi = () => api.get<AgentListResponse>('/agents');
+
+// Tools —— 供模型自主调用的工具清单
+export interface ToolDefinition {
+  tool_id: string;
+  name: string;
+  description: string;
+  category: string;
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
+  timeout_ms: number;
+  version: string;
+  /** 是否已暴露给模型自主调用 */
+  exposed_to_model: boolean;
+}
+
+export interface ToolListResponse {
+  total: number;
+  tool_calling_enabled: boolean;
+  exposed_to_model: number;
+  tools: ToolDefinition[];
+}
+
+export const listToolsApi = () => api.get<ToolListResponse>('/tools');
 
 export default api;

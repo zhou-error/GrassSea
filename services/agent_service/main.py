@@ -21,6 +21,7 @@ from services.agent_service.planner import TaskPlanner
 from services.agent_service.fsm import SessionFSM, SessionState
 from services.agent_service.registry import AgentRegistry
 from services.agent_service.executor import TaskExecutor
+from services.agent_service.tool_loop import ToolCallLoop
 from shared.utils.config import get_settings
 from shared.utils.logging import get_logger, setup_logging, set_trace_id
 from tools.base.registry import ToolRegistry
@@ -34,12 +35,13 @@ task_planner: TaskPlanner | None = None
 agent_registry: AgentRegistry | None = None
 tool_registry: ToolRegistry | None = None
 task_executor: TaskExecutor | None = None
+tool_call_loop: ToolCallLoop | None = None
 active_connections: dict[str, WebSocket] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global intent_classifier, task_planner, agent_registry, tool_registry, task_executor
+    global intent_classifier, task_planner, agent_registry, tool_registry, task_executor, tool_call_loop
     setup_logging(level="DEBUG" if settings.APP_DEBUG else "INFO")
     logger.info("Agent Service starting...")
 
@@ -48,15 +50,20 @@ async def lifespan(app: FastAPI):
     agent_registry = AgentRegistry()
     tool_registry = await build_tool_registry()
     task_executor = TaskExecutor(settings, agent_registry, tool_registry)
+    # 模型自主工具调用循环（需要 tool_registry 已就绪）
+    tool_call_loop = ToolCallLoop(settings, tool_registry)
 
     await agent_registry.initialize()
     await intent_classifier.initialize()
 
     registered_tools = await tool_registry.list_tools()
+    exposed_tools = await tool_call_loop.list_exposed_tools()
     logger.info(
         "Agent Service started",
         port=settings.AGENT_SERVICE_PORT,
         registered_tools=len(registered_tools),
+        tool_calling_enabled=settings.TOOL_CALLING_ENABLED,
+        exposed_to_model=len(exposed_tools),
     )
     yield
     logger.info("Agent Service shutting down...")
@@ -80,6 +87,8 @@ class ChatResponse(BaseModel):
     answer: str
     task_id: Optional[str] = None
     sources: list = Field(default_factory=list)
+    # 模型自主调用工具时产生的调用轨迹（供前端展示"调用了什么、结果如何"）
+    tool_trace: list[dict] = Field(default_factory=list)
 
 
 class TaskStatusResponse(BaseModel):
@@ -117,6 +126,42 @@ async def list_agents():
     """列出已注册智能体"""
     agents = await agent_registry.list_agents() if agent_registry else []
     return {"total": len(agents), "agents": agents}
+
+
+@app.get("/tools")
+async def list_tool_definitions():
+    """列出全部工具，并标出哪些已暴露给模型自主调用
+
+    exposed_to_model=true 的工具，模型可以在对话中自行决定调用（function calling）。
+    """
+    if not tool_registry:
+        return {"total": 0, "tools": [], "tool_calling_enabled": False}
+
+    manifests = await tool_registry.list_tools()
+    exposed: set[str] = set()
+    if tool_call_loop:
+        exposed = {m.tool_id for m in await tool_call_loop.list_exposed_tools()}
+
+    tools = [
+        {
+            "tool_id": m.tool_id,
+            "name": m.name,
+            "description": m.description,
+            "category": m.category.value,
+            "input_schema": m.input_schema,
+            "output_schema": m.output_schema,
+            "timeout_ms": m.timeout_ms,
+            "version": m.version,
+            "exposed_to_model": m.tool_id in exposed,
+        }
+        for m in manifests
+    ]
+    return {
+        "total": len(tools),
+        "tool_calling_enabled": settings.TOOL_CALLING_ENABLED,
+        "exposed_to_model": len(exposed),
+        "tools": tools,
+    }
 
 
 @app.get("/admin/status")
@@ -209,7 +254,28 @@ async def chat(request: ChatRequest):
         return ChatResponse(session_id=session_id, intent="knowledge_query", answer=result["answer"], sources=result.get("sources", []))
 
     elif intent_result.intent_type in (IntentType.TOOL_CALL, IntentType.PROFESSIONAL_TASK):
-        # 任务规划
+        # 3.1 优先尝试「模型自主决定调用工具」
+        #     模型会拿到工具清单与 JSON Schema，自行选择调用哪个、传什么参数，
+        #     结果回灌后给出最终回答；全过程记录在 tool_trace 中。
+        loop_result = (
+            await tool_call_loop.run(request.message, session_id, request.user_id)
+            if tool_call_loop
+            else {"ok": False, "reason": "tool_call_loop_unavailable"}
+        )
+        if loop_result.get("ok"):
+            return ChatResponse(
+                session_id=session_id,
+                intent=intent_result.intent_type,
+                answer=loop_result.get("answer") or "",
+                tool_trace=loop_result.get("tool_trace") or [],
+            )
+
+        # 3.2 回落：规则规划 + DAG 异步执行（保留既有能力，不因模型不可用而失效）
+        logger.info(
+            "Tool-call loop unavailable, falling back to rule planner",
+            reason=loop_result.get("reason"),
+            session=session_id,
+        )
         task = await task_planner.plan(request.message, intent_result)
         # 异步执行
         await task_executor.execute_async(task, session_id, request.user_id)

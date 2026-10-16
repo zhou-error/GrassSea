@@ -136,6 +136,17 @@ async def proxy_agents():
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
 
+@app.get("/tools")
+async def proxy_tools():
+    """转发工具清单到智能体编排服务 (8002)
+
+    返回每个工具的 schema 与是否已暴露给模型自主调用。
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{AGENT_SERVICE_URL}/tools")
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
 @app.get("/task/{task_id}/status")
 async def proxy_task_status(task_id: str):
     """转发任务状态查询到智能体编排服务 (8002)"""

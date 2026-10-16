@@ -7,6 +7,7 @@ import { chatApi, getTaskStatusApi } from '../api';
 import type { TaskStatusResponse } from '../api';
 import { useChatStore } from '../stores/chatStore';
 import DAGPanel from '../components/DAGPanel';
+import ToolTraceCard from '../components/ToolTraceCard';
 import { bulletText, stepOutputLines, summaryLines } from '../components/stepOutput';
 import dayjs from 'dayjs';
 
@@ -37,7 +38,7 @@ const CapsuleTag: React.FC<{ label: string }> = ({ label }) => (
 );
 
 const ChatPage: React.FC = () => {
-  const { messages, sessionId, streaming, addMessage, appendContent, setSessionId, setStreaming } = useChatStore();
+  const { messages, sessionId, streaming, addMessage, appendContent, setSessionId, setStreaming, setToolTrace } = useChatStore();
   const [input, setInput] = useState('');
   // 当前对话绑定的任务 ID，用于右侧 DAG 拓扑面板
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -145,8 +146,10 @@ const ChatPage: React.FC = () => {
 
     try {
       const res = await chatApi(currentInput, sessionId || undefined);
-      const { session_id, answer, task_id, sources } = res.data;
+      const { session_id, answer, task_id, sources, tool_trace } = res.data;
       if (session_id) setSessionId(session_id);
+      // 模型自主调用过工具时展示调用轨迹
+      if (tool_trace && tool_trace.length > 0) setToolTrace(assistantId, tool_trace);
       for (const char of answer) {
         appendContent(assistantId, char);
         await new Promise((r) => setTimeout(r, 12));
@@ -255,6 +258,9 @@ const ChatPage: React.FC = () => {
                   boxShadow: 'var(--shadow-soft)',
                 }}
               >
+                {msg.toolTrace && msg.toolTrace.length > 0 && (
+                  <ToolTraceCard trace={msg.toolTrace} />
+                )}
                 <div className="markdown-body" style={{ fontSize: '13.5px', lineHeight: 1.75 }}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content || (streaming ? '...' : '')}

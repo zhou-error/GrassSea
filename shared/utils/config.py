@@ -172,6 +172,18 @@ class Settings(BaseSettings):
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
 
+    # --- 工具调用（由模型自主决定调用哪个工具）---
+    # 总开关：关闭后 /chat 回到原有的规则规划路径
+    TOOL_CALLING_ENABLED: bool = True
+    # 最多几轮「模型思考 → 调用工具 → 结果回灌」
+    TOOL_CALL_MAX_ROUNDS: int = 6
+    # 整个工具调用循环的总超时（秒）
+    TOOL_CALL_TIMEOUT_SECONDS: int = 120
+    # 工具调用使用的模型
+    TOOL_CALL_MODEL: str = "deepseek-chat"
+    # 是否把未实现的工具也暴露给模型（默认否：避免模型浪费轮次）
+    TOOL_CALL_EXPOSE_UNIMPLEMENTED: bool = False
+
     # --- 内部服务 URL（Docker 中自动覆盖为容器名）---
     MODEL_GATEWAY_URL: str = "http://localhost:8004"
     AGENT_SERVICE_URL: str = "http://localhost:8002"

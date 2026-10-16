@@ -1,14 +1,16 @@
 # 附录 · 全文件与符号索引
 
-> 本文件由脚本从源码**机械生成**，用于保证「不遗漏任何源文件」；正文见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
+> 本文件由脚本从源码**机械生成**，用于保证「不遗漏任何源文件」；正文见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)，工具开发见 [`TOOL_DEVELOPMENT_GUIDE.md`](./TOOL_DEVELOPMENT_GUIDE.md)。
 
 | 项 | 值 |
 |---|---|
-| 生成时间 | 2026-10-16 05:25:08 |
-| 代码文件数 | 123 |
-| 代码总行数 | 11356 |
-| 提取符号数（含多行签名） | 550 |
-| 登记文件总数（含配置/文档） | 163 |
+| 生成时间 | 2026-10-16 14:37:57 |
+| 代码文件数 | 125 |
+| 代码总行数 | 12021 |
+| 类数量 | 111 |
+| 提取符号数（含多行签名） | 569 |
+| HTTP 路由装饰器 | 35 |
+| 登记文件总数 | 166 |
 
 **范围声明**：已排除 `node_modules`、`.venv`、`docker-data`、`.git`、`.freebuff`、`dist`、`__pycache__`、`.uv-cache`；
 `教学文件/`、`ProductDesign/`、`AI开发提示词/`、`项目开发日记/` 为非代码资产，见正文第 10 章。
@@ -35,114 +37,116 @@
 | 13 | `agents/review_agent/__init__.py` | 2 | 0 | 0 | — |
 | 14 | `agents/review_agent/agent.py` | 157 | 1 | 4 | 审查 Agent (Review Agent) |
 | 15 | `frontend/src/App.tsx` | 39 | 0 | 1 | — |
-| 16 | `frontend/src/api/index.ts` | 171 | 0 | 24 | — |
+| 16 | `frontend/src/api/index.ts` | 215 | 0 | 29 | — |
 | 17 | `frontend/src/components/DAGPanel.tsx` | 364 | 0 | 1 | — |
 | 18 | `frontend/src/components/ShimmerBar.tsx` | 21 | 0 | 1 | — |
 | 19 | `frontend/src/components/Sidebar.tsx` | 144 | 0 | 1 | — |
-| 20 | `frontend/src/components/TopNav.tsx` | 67 | 0 | 1 | — |
-| 21 | `frontend/src/components/stepOutput.tsx` | 121 | 0 | 5 | — |
-| 22 | `frontend/src/main.tsx` | 36 | 0 | 0 | — |
-| 23 | `frontend/src/pages/Chat.tsx` | 329 | 0 | 2 | — |
-| 24 | `frontend/src/pages/KnowledgeBase.tsx` | 530 | 0 | 1 | — |
-| 25 | `frontend/src/pages/Settings.tsx` | 176 | 0 | 1 | — |
-| 26 | `frontend/src/pages/TaskCenter.tsx` | 508 | 0 | 1 | — |
-| 27 | `frontend/src/stores/chatStore.ts` | 38 | 0 | 1 | — |
-| 28 | `frontend/src/stores/uiStore.ts` | 16 | 0 | 1 | — |
-| 29 | `frontend/vite.config.d.ts` | 3 | 0 | 0 | — |
-| 30 | `frontend/vite.config.ts` | 19 | 0 | 0 | — |
-| 31 | `scripts/backup_db.py` | 117 | 0 | 5 | 数据库备份脚本 — 每日全量 + WAL 归档 |
-| 32 | `scripts/init_db.py` | 73 | 0 | 3 | 数据库一键建表脚本（个人开发环境） |
-| 33 | `scripts/init_minio.py` | 90 | 0 | 2 | MinIO bucket 初始化脚本 |
-| 34 | `scripts/reset_knowledge_base.py` | 46 | 0 | 1 | 重建 Milvus 知识库集合 |
-| 35 | `scripts/seed_data.py` | 96 | 0 | 3 | 数据库种子脚本（幂等，可重复执行） |
-| 36 | `services/agent_service/__init__.py` | 2 | 0 | 0 | — |
-| 37 | `services/agent_service/executor.py` | 537 | 1 | 15 | 任务执行引擎 |
-| 38 | `services/agent_service/fsm.py` | 143 | 2 | 7 | 会话状态机 (Session FSM) |
-| 39 | `services/agent_service/intent.py` | 213 | 3 | 6 | 意图识别模块 |
-| 40 | `services/agent_service/main.py` | 313 | 3 | 12 | 智能体编排服务 (Agent Orchestration Service) |
-| 41 | `services/agent_service/planner.py` | 402 | 3 | 12 | 任务规划模块 |
-| 42 | `services/agent_service/registry.py` | 131 | 1 | 13 | 智能体注册中心 |
-| 43 | `services/chat_service/__init__.py` | 2 | 0 | 0 | — |
-| 44 | `services/chat_service/config_api.py` | 303 | 2 | 8 | 系统配置管理 API — 允许用户在 Web 中修改关键配置 |
-| 45 | `services/chat_service/main.py` | 145 | 0 | 10 | 对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。 |
-| 46 | `services/knowledge_service/__init__.py` | 2 | 0 | 0 | — |
-| 47 | `services/knowledge_service/generator.py` | 171 | 1 | 7 | 答案生成模块 |
-| 48 | `services/knowledge_service/ingestion.py` | 336 | 2 | 12 | 文档预处理流水线 |
-| 49 | `services/knowledge_service/main.py` | 332 | 7 | 9 | 知识库服务 (Knowledge Service) |
-| 50 | `services/knowledge_service/reranker.py` | 115 | 1 | 5 | 重排序模块 |
-| 51 | `services/knowledge_service/retrieval.py` | 429 | 2 | 15 | 混合检索模块 |
-| 52 | `services/model_gateway/__init__.py` | 2 | 0 | 0 | — |
-| 53 | `services/model_gateway/main.py` | 334 | 5 | 8 | 模型网关服务 (Model Gateway) |
-| 54 | `services/model_gateway/router.py` | 304 | 3 | 10 | 模型路由器 |
-| 55 | `services/model_gateway/token_tracker.py` | 81 | 1 | 4 | Token 用量统计与计费 |
-| 56 | `shared/__init__.py` | 1 | 0 | 0 | — |
-| 57 | `shared/middleware/__init__.py` | 2 | 0 | 0 | — |
-| 58 | `shared/middleware/observability.py` | 72 | 1 | 2 | 可观测性中间件 — OpenTelemetry 自动埋点 + Prometheus 指标 |
-| 59 | `shared/middleware/security.py` | 114 | 2 | 7 | 安全中间件 — RBAC + API Key + 预签名 URL + 审计日志 |
-| 60 | `shared/models/__init__.py` | 1 | 0 | 0 | — |
-| 61 | `shared/models/alembic/env.py` | 80 | 0 | 4 | Alembic 环境配置 |
-| 62 | `shared/models/alembic/versions/__init__.py` | 2 | 0 | 0 | — |
-| 63 | `shared/models/database.py` | 134 | 1 | 9 | 数据库连接管理模块 |
-| 64 | `shared/models/mongodb/__init__.py` | 2 | 0 | 0 | — |
-| 65 | `shared/models/mongodb/collections.py` | 130 | 1 | 0 | MongoDB 集合定义与索引 |
-| 66 | `shared/models/postgres/__init__.py` | 23 | 0 | 0 | — |
-| 67 | `shared/models/postgres/base.py` | 30 | 2 | 0 | SQLAlchemy 基类与共享 mixin |
-| 68 | `shared/models/postgres/offset_table.py` | 42 | 1 | 1 | 型值表模型 |
-| 69 | `shared/models/postgres/project.py` | 55 | 2 | 1 | 项目模型 |
-| 70 | `shared/models/postgres/prompt_template.py` | 40 | 1 | 1 | Prompt 模板模型 |
-| 71 | `shared/models/postgres/system_config.py` | 27 | 1 | 1 | 系统配置模型 |
-| 72 | `shared/models/postgres/task.py` | 64 | 3 | 1 | 任务记录模型 |
-| 73 | `shared/models/postgres/todo.py` | 64 | 3 | 1 | 待办事项模型 |
-| 74 | `shared/models/postgres/user.py` | 34 | 1 | 1 | 用户模型 |
-| 75 | `shared/models/repository/__init__.py` | 14 | 0 | 0 | — |
-| 76 | `shared/models/repository/base.py` | 79 | 1 | 8 | Repository 基类 |
-| 77 | `shared/models/repository/conversation.py` | 109 | 1 | 9 | Conversation Repository (MongoDB) |
-| 78 | `shared/models/repository/project.py` | 57 | 1 | 4 | Project Repository |
-| 79 | `shared/models/repository/task.py` | 73 | 1 | 5 | Task Repository |
-| 80 | `shared/models/timescale/__init__.py` | 15 | 0 | 0 | — |
-| 81 | `shared/models/timescale/metrics.py` | 100 | 4 | 4 | TimescaleDB 时序指标模型 |
-| 82 | `shared/protocols/__init__.py` | 2 | 0 | 0 | — |
-| 83 | `shared/protocols/agent.py` | 117 | 6 | 11 | 智能体基础协议定义 |
-| 84 | `shared/protocols/tool.py` | 115 | 5 | 12 | 工具基础协议定义 |
-| 85 | `shared/utils/__init__.py` | 1 | 0 | 0 | — |
-| 86 | `shared/utils/config.py` | 206 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
-| 87 | `shared/utils/embedding.py` | 219 | 4 | 14 | 统一的文本向量化模块 |
-| 88 | `shared/utils/logging.py` | 114 | 0 | 6 | GrassSea AI — 结构化日志模块 |
-| 89 | `shared/utils/secrets.py` | 155 | 0 | 7 | API Key 加密存储模块 |
-| 90 | `tests/__init__.py` | 2 | 0 | 0 | — |
-| 91 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
-| 92 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
-| 93 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
-| 94 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
-| 95 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
-| 96 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
-| 97 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
-| 98 | `tools/__init__.py` | 2 | 0 | 0 | — |
-| 99 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
-| 100 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
-| 101 | `tools/bootstrap.py` | 78 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
-| 102 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
-| 103 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
-| 104 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
-| 105 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
-| 106 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
-| 107 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
-| 108 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
-| 109 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
-| 110 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
-| 111 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
-| 112 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
-| 113 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
-| 114 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
-| 115 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
-| 116 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
-| 117 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
-| 118 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
-| 119 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
-| 120 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
-| 121 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
-| 122 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
-| 123 | `练习/test_async.py` | 55 | 0 | 5 | — |
+| 20 | `frontend/src/components/ToolTraceCard.tsx` | 104 | 0 | 1 | — |
+| 21 | `frontend/src/components/TopNav.tsx` | 67 | 0 | 1 | — |
+| 22 | `frontend/src/components/stepOutput.tsx` | 121 | 0 | 5 | — |
+| 23 | `frontend/src/main.tsx` | 36 | 0 | 0 | — |
+| 24 | `frontend/src/pages/Chat.tsx` | 335 | 0 | 2 | — |
+| 25 | `frontend/src/pages/KnowledgeBase.tsx` | 530 | 0 | 1 | — |
+| 26 | `frontend/src/pages/Settings.tsx` | 176 | 0 | 1 | — |
+| 27 | `frontend/src/pages/TaskCenter.tsx` | 508 | 0 | 1 | — |
+| 28 | `frontend/src/stores/chatStore.ts` | 46 | 0 | 1 | — |
+| 29 | `frontend/src/stores/uiStore.ts` | 16 | 0 | 1 | — |
+| 30 | `frontend/vite.config.d.ts` | 3 | 0 | 0 | — |
+| 31 | `frontend/vite.config.ts` | 19 | 0 | 0 | — |
+| 32 | `scripts/backup_db.py` | 117 | 0 | 5 | 数据库备份脚本 — 每日全量 + WAL 归档 |
+| 33 | `scripts/init_db.py` | 73 | 0 | 3 | 数据库一键建表脚本（个人开发环境） |
+| 34 | `scripts/init_minio.py` | 90 | 0 | 2 | MinIO bucket 初始化脚本 |
+| 35 | `scripts/reset_knowledge_base.py` | 46 | 0 | 1 | 重建 Milvus 知识库集合 |
+| 36 | `scripts/seed_data.py` | 96 | 0 | 3 | 数据库种子脚本（幂等，可重复执行） |
+| 37 | `services/agent_service/__init__.py` | 2 | 0 | 0 | — |
+| 38 | `services/agent_service/executor.py` | 537 | 1 | 15 | 任务执行引擎 |
+| 39 | `services/agent_service/fsm.py` | 143 | 2 | 7 | 会话状态机 (Session FSM) |
+| 40 | `services/agent_service/intent.py` | 213 | 3 | 6 | 意图识别模块 |
+| 41 | `services/agent_service/main.py` | 379 | 3 | 13 | 智能体编排服务 (Agent Orchestration Service) |
+| 42 | `services/agent_service/planner.py` | 402 | 3 | 12 | 任务规划模块 |
+| 43 | `services/agent_service/registry.py` | 131 | 1 | 13 | 智能体注册中心 |
+| 44 | `services/agent_service/tool_loop.py` | 281 | 1 | 9 | 模型自主工具调用循环（OpenAI function calling） |
+| 45 | `services/chat_service/__init__.py` | 2 | 0 | 0 | — |
+| 46 | `services/chat_service/config_api.py` | 303 | 2 | 8 | 系统配置管理 API — 允许用户在 Web 中修改关键配置 |
+| 47 | `services/chat_service/main.py` | 156 | 0 | 11 | 对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。 |
+| 48 | `services/knowledge_service/__init__.py` | 2 | 0 | 0 | — |
+| 49 | `services/knowledge_service/generator.py` | 171 | 1 | 7 | 答案生成模块 |
+| 50 | `services/knowledge_service/ingestion.py` | 336 | 2 | 12 | 文档预处理流水线 |
+| 51 | `services/knowledge_service/main.py` | 332 | 7 | 9 | 知识库服务 (Knowledge Service) |
+| 52 | `services/knowledge_service/reranker.py` | 115 | 1 | 5 | 重排序模块 |
+| 53 | `services/knowledge_service/retrieval.py` | 429 | 2 | 15 | 混合检索模块 |
+| 54 | `services/model_gateway/__init__.py` | 2 | 0 | 0 | — |
+| 55 | `services/model_gateway/main.py` | 362 | 5 | 8 | 模型网关服务 (Model Gateway) |
+| 56 | `services/model_gateway/router.py` | 409 | 3 | 11 | 模型路由器 |
+| 57 | `services/model_gateway/token_tracker.py` | 81 | 1 | 4 | Token 用量统计与计费 |
+| 58 | `shared/__init__.py` | 1 | 0 | 0 | — |
+| 59 | `shared/middleware/__init__.py` | 2 | 0 | 0 | — |
+| 60 | `shared/middleware/observability.py` | 72 | 1 | 2 | 可观测性中间件 — OpenTelemetry 自动埋点 + Prometheus 指标 |
+| 61 | `shared/middleware/security.py` | 114 | 2 | 7 | 安全中间件 — RBAC + API Key + 预签名 URL + 审计日志 |
+| 62 | `shared/models/__init__.py` | 1 | 0 | 0 | — |
+| 63 | `shared/models/alembic/env.py` | 80 | 0 | 4 | Alembic 环境配置 |
+| 64 | `shared/models/alembic/versions/__init__.py` | 2 | 0 | 0 | — |
+| 65 | `shared/models/database.py` | 134 | 1 | 9 | 数据库连接管理模块 |
+| 66 | `shared/models/mongodb/__init__.py` | 2 | 0 | 0 | — |
+| 67 | `shared/models/mongodb/collections.py` | 130 | 1 | 0 | MongoDB 集合定义与索引 |
+| 68 | `shared/models/postgres/__init__.py` | 23 | 0 | 0 | — |
+| 69 | `shared/models/postgres/base.py` | 30 | 2 | 0 | SQLAlchemy 基类与共享 mixin |
+| 70 | `shared/models/postgres/offset_table.py` | 42 | 1 | 1 | 型值表模型 |
+| 71 | `shared/models/postgres/project.py` | 55 | 2 | 1 | 项目模型 |
+| 72 | `shared/models/postgres/prompt_template.py` | 40 | 1 | 1 | Prompt 模板模型 |
+| 73 | `shared/models/postgres/system_config.py` | 27 | 1 | 1 | 系统配置模型 |
+| 74 | `shared/models/postgres/task.py` | 64 | 3 | 1 | 任务记录模型 |
+| 75 | `shared/models/postgres/todo.py` | 64 | 3 | 1 | 待办事项模型 |
+| 76 | `shared/models/postgres/user.py` | 34 | 1 | 1 | 用户模型 |
+| 77 | `shared/models/repository/__init__.py` | 14 | 0 | 0 | — |
+| 78 | `shared/models/repository/base.py` | 79 | 1 | 8 | Repository 基类 |
+| 79 | `shared/models/repository/conversation.py` | 109 | 1 | 9 | Conversation Repository (MongoDB) |
+| 80 | `shared/models/repository/project.py` | 57 | 1 | 4 | Project Repository |
+| 81 | `shared/models/repository/task.py` | 73 | 1 | 5 | Task Repository |
+| 82 | `shared/models/timescale/__init__.py` | 15 | 0 | 0 | — |
+| 83 | `shared/models/timescale/metrics.py` | 100 | 4 | 4 | TimescaleDB 时序指标模型 |
+| 84 | `shared/protocols/__init__.py` | 2 | 0 | 0 | — |
+| 85 | `shared/protocols/agent.py` | 117 | 6 | 11 | 智能体基础协议定义 |
+| 86 | `shared/protocols/tool.py` | 115 | 5 | 12 | 工具基础协议定义 |
+| 87 | `shared/utils/__init__.py` | 1 | 0 | 0 | — |
+| 88 | `shared/utils/config.py` | 218 | 1 | 13 | GrassSea AI — 统一配置管理模块 |
+| 89 | `shared/utils/embedding.py` | 219 | 4 | 14 | 统一的文本向量化模块 |
+| 90 | `shared/utils/logging.py` | 114 | 0 | 6 | GrassSea AI — 结构化日志模块 |
+| 91 | `shared/utils/secrets.py` | 155 | 0 | 7 | API Key 加密存储模块 |
+| 92 | `tests/__init__.py` | 2 | 0 | 0 | — |
+| 93 | `tests/e2e/__init__.py` | 2 | 0 | 0 | — |
+| 94 | `tests/integration/__init__.py` | 2 | 0 | 0 | — |
+| 95 | `tests/unit/__init__.py` | 2 | 0 | 0 | — |
+| 96 | `tests/unit/test_config.py` | 59 | 1 | 5 | 配置模块单元测试 |
+| 97 | `tests/unit/test_logging.py` | 45 | 1 | 5 | 日志模块单元测试 |
+| 98 | `tests/unit/test_model_gateway.py` | 88 | 2 | 8 | 模型网关单元测试 |
+| 99 | `tests/unit/test_rag.py` | 183 | 5 | 18 | RAG 引擎单元测试 |
+| 100 | `tools/__init__.py` | 2 | 0 | 0 | — |
+| 101 | `tools/base/__init__.py` | 2 | 0 | 0 | — |
+| 102 | `tools/base/registry.py` | 115 | 1 | 8 | 工具注册中心 — 支持热插拔机制 |
+| 103 | `tools/bootstrap.py` | 78 | 0 | 1 | 工具引导模块 — 统一实例化并注册 tools/ 下的全部工具 |
+| 104 | `tools/cad/__init__.py` | 2 | 0 | 0 | — |
+| 105 | `tools/cad/cad_draw.py` | 23 | 1 | 2 | CAD 图纸生成工具 — 型线图绘制、曲线光顺 |
+| 106 | `tools/cad/cad_parse.py` | 23 | 1 | 2 | CAD 图纸解析工具 — 从 DWG/DXF 提取尺寸、标注、图层 |
+| 107 | `tools/cad/dwg_converter.py` | 23 | 1 | 2 | DWG 格式转换工具 — DWG ↔ DXF ↔ PDF ↔ PNG |
+| 108 | `tools/compliance/__init__.py` | 2 | 0 | 0 | — |
+| 109 | `tools/compliance/reg_check.py` | 23 | 1 | 2 | 规范合规审查工具 — 基于规范条文自动审查设计参数 |
+| 110 | `tools/computation/__init__.py` | 2 | 0 | 0 | — |
+| 111 | `tools/computation/hull_transform.py` | 78 | 1 | 2 | 船型改造工具 — 母型船变换、参数优化 |
+| 112 | `tools/computation/hydrostatics.py` | 59 | 1 | 2 | 静水力计算工具 |
+| 113 | `tools/computation/resistance.py` | 58 | 1 | 2 | 阻力计算工具 — Holtrop 法、ITTC 法 |
+| 114 | `tools/computation/stability.py` | 65 | 1 | 2 | 稳性分析工具 — 完整稳性、破舱稳性 |
+| 115 | `tools/file/__init__.py` | 2 | 0 | 0 | — |
+| 116 | `tools/file/ocr_engine.py` | 23 | 1 | 2 | 图纸 OCR 工具 — 扫描图纸文字/标注识别 |
+| 117 | `tools/file/pdf_parser.py` | 23 | 1 | 2 | PDF 解析工具 — 规范文件文本/表格提取 |
+| 118 | `tools/file/todo_manager.py` | 23 | 1 | 2 | 待办管理工具 — 创建/更新/提醒待办事项 |
+| 119 | `tools/file/web_search.py` | 23 | 1 | 2 | 联网搜索工具 — 补充最新信息 |
+| 120 | `tools/file/xlsx_parser.py` | 23 | 1 | 2 | 表格解析工具 — 型值表结构化提取 |
+| 121 | `tools/report/__init__.py` | 2 | 0 | 0 | — |
+| 122 | `tools/report/report_gen.py` | 23 | 1 | 2 | 报告生成工具 — Markdown → PDF（规范排版） |
+| 123 | `练习/00-01-练习1.py` | 19 | 0 | 2 | — |
+| 124 | `练习/00-01-练习3.py` | 31 | 0 | 2 | 练习3：改造同步代码 |
+| 125 | `练习/test_async.py` | 55 | 0 | 5 | — |
 
 ---
 
@@ -303,35 +307,40 @@
 
 ### `frontend/src/api/index.ts`
 
-- **行数**：171　**类**：0　**函数/方法**：24
+- **行数**：215　**类**：0　**函数/方法**：29
 - **内部依赖**：（无）
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 17 | const | `chatApi` | `` |
-| 21 | interface | `RagDocumentSource` | `` |
-| 25 | interface | `RagDocument` | `` |
-| 33 | interface | `RagDocumentListResponse` | `` |
-| 38 | interface | `RagUploadResponse` | `` |
-| 45 | interface | `RagDeleteResponse` | `` |
-| 51 | interface | `RagSourceChunk` | `` |
-| 59 | interface | `RagQueryResponse` | `` |
-| 67 | const | `ragQueryApi` | `` |
-| 74 | const | `listDocumentsApi` | `` |
-| 79 | const | `deleteDocumentApi` | `` |
-| 83 | type | `UploadProgressHandler` | `` |
-| 85 | const | `uploadDocumentApi` | `` |
-| 102 | type | `TaskStatus` | `` |
-| 104 | interface | `TaskSummary` | `` |
-| 115 | interface | `TaskListResponse` | `` |
-| 120 | interface | `TaskStep` | `` |
-| 129 | interface | `TaskResult` | `` |
-| 139 | interface | `TaskStatusResponse` | `` |
-| 148 | interface | `AgentInfo` | `` |
-| 158 | interface | `AgentListResponse` | `` |
-| 163 | const | `listTasksApi` | `` |
-| 165 | const | `getTaskStatusApi` | `` |
-| 168 | const | `listAgentsApi` | `` |
+| 19 | interface | `ToolCallTrace` | `` |
+| 28 | interface | `ChatResponse` | `` |
+| 38 | const | `chatApi` | `` |
+| 42 | interface | `RagDocumentSource` | `` |
+| 46 | interface | `RagDocument` | `` |
+| 54 | interface | `RagDocumentListResponse` | `` |
+| 59 | interface | `RagUploadResponse` | `` |
+| 66 | interface | `RagDeleteResponse` | `` |
+| 72 | interface | `RagSourceChunk` | `` |
+| 80 | interface | `RagQueryResponse` | `` |
+| 88 | const | `ragQueryApi` | `` |
+| 95 | const | `listDocumentsApi` | `` |
+| 100 | const | `deleteDocumentApi` | `` |
+| 104 | type | `UploadProgressHandler` | `` |
+| 106 | const | `uploadDocumentApi` | `` |
+| 123 | type | `TaskStatus` | `` |
+| 125 | interface | `TaskSummary` | `` |
+| 136 | interface | `TaskListResponse` | `` |
+| 141 | interface | `TaskStep` | `` |
+| 150 | interface | `TaskResult` | `` |
+| 160 | interface | `TaskStatusResponse` | `` |
+| 169 | interface | `AgentInfo` | `` |
+| 179 | interface | `AgentListResponse` | `` |
+| 184 | const | `listTasksApi` | `` |
+| 186 | const | `getTaskStatusApi` | `` |
+| 189 | const | `listAgentsApi` | `` |
+| 192 | interface | `ToolDefinition` | `` |
+| 205 | interface | `ToolListResponse` | `` |
+| 212 | const | `listToolsApi` | `` |
 
 ### `frontend/src/components/DAGPanel.tsx`
 
@@ -359,6 +368,15 @@
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
 | 45 | component | `Sidebar` | `` |
+
+### `frontend/src/components/ToolTraceCard.tsx`
+
+- **行数**：104　**类**：0　**函数/方法**：1
+- **内部依赖**：`../api`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 30 | component | `ToolTraceCard` | `` |
 
 ### `frontend/src/components/TopNav.tsx`
 
@@ -391,13 +409,13 @@
 
 ### `frontend/src/pages/Chat.tsx`
 
-- **行数**：329　**类**：0　**函数/方法**：2
-- **内部依赖**：`../api`、`../components/DAGPanel`、`../components/stepOutput`、`../stores/chatStore`
+- **行数**：335　**类**：0　**函数/方法**：2
+- **内部依赖**：`../api`、`../components/DAGPanel`、`../components/ToolTraceCard`、`../components/stepOutput`、`../stores/chatStore`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 16 | component | `CapsuleTag` | `` |
-| 39 | component | `ChatPage` | `` |
+| 17 | component | `CapsuleTag` | `` |
+| 40 | component | `ChatPage` | `` |
 
 ### `frontend/src/pages/KnowledgeBase.tsx`
 
@@ -428,12 +446,12 @@
 
 ### `frontend/src/stores/chatStore.ts`
 
-- **行数**：38　**类**：0　**函数/方法**：1
-- **内部依赖**：（无）
+- **行数**：46　**类**：0　**函数/方法**：1
+- **内部依赖**：`../api`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 23 | const | `useChatStore` | `` |
+| 27 | const | `useChatStore` | `` |
 
 ### `frontend/src/stores/uiStore.ts`
 
@@ -587,27 +605,28 @@
 
 ### `services/agent_service/main.py`
 
-- **行数**：313　**类**：3　**函数/方法**：12
+- **行数**：379　**类**：3　**函数/方法**：13
 - **职责**：智能体编排服务 (Agent Orchestration Service)
-- **内部依赖**：`services.agent_service.executor`、`services.agent_service.fsm`、`services.agent_service.intent`、`services.agent_service.planner`、`services.agent_service.registry`、`shared.utils.config`、`shared.utils.logging`、`tools.base.registry`、`tools.bootstrap`
+- **内部依赖**：`services.agent_service.executor`、`services.agent_service.fsm`、`services.agent_service.intent`、`services.agent_service.planner`、`services.agent_service.registry`、`services.agent_service.tool_loop`、`shared.utils.config`、`shared.utils.logging`、`tools.base.registry`、`tools.bootstrap`
 
 | 行号 | 类型 | 符号 | 签名 |
 |---:|---|---|---|
-| 41 | function | `lifespan` | `(app: FastAPI)` |
-| 70 | class | `ChatRequest` | `(BaseModel)` |
-| 77 | class | `ChatResponse` | `(BaseModel)` |
-| 85 | class | `TaskStatusResponse` | `(BaseModel)` |
-| 97 | function | `health` | `()` |
-| 109 | function | `list_tasks` | `()` |
-| 116 | function | `list_agents` | `()` |
-| 123 | function | `admin_status` | `()` |
-| 135 | function | `reload_config` | `(config: dict[str, str])` |
-| 177 | function | `_describe_plan` | `(task: dict) → str` |
-| 192 | function | `chat` | `(request: ChatRequest)` |
-| 252 | function | `get_task_status` | `(task_id: str)` |
-| 261 | function | `websocket_endpoint` | `(websocket: WebSocket, session_id: str)` |
-| 282 | function | `_handle_chitchat` | `(message: str) → str` |
-| 298 | function | `_handle_knowledge_query` | `(message: str, session_id: str) → dict` |
+| 43 | function | `lifespan` | `(app: FastAPI)` |
+| 77 | class | `ChatRequest` | `(BaseModel)` |
+| 84 | class | `ChatResponse` | `(BaseModel)` |
+| 94 | class | `TaskStatusResponse` | `(BaseModel)` |
+| 106 | function | `health` | `()` |
+| 118 | function | `list_tasks` | `()` |
+| 125 | function | `list_agents` | `()` |
+| 132 | function | `list_tool_definitions` | `()` |
+| 168 | function | `admin_status` | `()` |
+| 180 | function | `reload_config` | `(config: dict[str, str])` |
+| 222 | function | `_describe_plan` | `(task: dict) → str` |
+| 237 | function | `chat` | `(request: ChatRequest)` |
+| 318 | function | `get_task_status` | `(task_id: str)` |
+| 327 | function | `websocket_endpoint` | `(websocket: WebSocket, session_id: str)` |
+| 348 | function | `_handle_chitchat` | `(message: str) → str` |
+| 364 | function | `_handle_knowledge_query` | `(message: str, session_id: str) → dict` |
 
 ### `services/agent_service/planner.py`
 
@@ -656,6 +675,25 @@
 | 108 | method | `AgentRegistry.list_agents` | `(self) → list[dict]` |
 | 123 | method | `AgentRegistry.check_health` | `(self) → None` |
 
+### `services/agent_service/tool_loop.py`
+
+- **行数**：281　**类**：1　**函数/方法**：9
+- **职责**：模型自主工具调用循环（OpenAI function calling）
+- **内部依赖**：`shared.protocols.tool`、`shared.utils.config`、`shared.utils.logging`
+
+| 行号 | 类型 | 符号 | 签名 |
+|---:|---|---|---|
+| 64 | function | `manifest_to_openai_tool` | `(manifest: ToolManifest) → dict` |
+| 80 | class | `ToolCallLoop` | `` |
+| 83 | method | `ToolCallLoop.__init__` | `(self, settings: Settings, tool_registry: Any) → None` |
+| 89 | method | `ToolCallLoop.list_exposed_tools` | `(self) → list[ToolManifest]` |
+| 96 | method | `ToolCallLoop.openai_tools` | `(self) → list[dict]` |
+| 102 | method | `ToolCallLoop.run` | `(self, message: str, session_id: str, user_id: str \| None = None,) → dict` |
+| 175 | method | `ToolCallLoop._call_model` | `(self, client: httpx.AsyncClient, messages: list[dict], tools: list[dict] \| None) → dict` |
+| 201 | method | `ToolCallLoop._execute_one` | `(self, call: dict, messages: list[dict], trace: list[dict], round_index: int, session_id: str, user_id: str \| None,) → None` |
+| 247 | method | `ToolCallLoop._stringify` | `(result: dict) → str` |
+| 255 | method | `ToolCallLoop._finalize` | `(self, client: httpx.AsyncClient, messages: list[dict], trace: list[dict], rounds: int,) → dict` |
+
 ### `services/chat_service/__init__.py`
 
 - **行数**：2　**类**：0　**函数/方法**：0
@@ -684,7 +722,7 @@
 
 ### `services/chat_service/main.py`
 
-- **行数**：145　**类**：0　**函数/方法**：10
+- **行数**：156　**类**：0　**函数/方法**：11
 - **职责**：对话服务 (Chat Service) — 前端 API 网关，提供路由转发到各后端服务。
 - **内部依赖**：`services.chat_service.config_api`、`shared.utils.config`、`shared.utils.logging`
 
@@ -699,7 +737,8 @@
 | 114 | function | `proxy_rag_delete` | `(document_id: str)` |
 | 124 | function | `proxy_tasks` | `()` |
 | 132 | function | `proxy_agents` | `()` |
-| 140 | function | `proxy_task_status` | `(task_id: str)` |
+| 140 | function | `proxy_tools` | `()` |
+| 151 | function | `proxy_task_status` | `(task_id: str)` |
 
 ### `services/knowledge_service/__init__.py`
 
@@ -823,7 +862,7 @@
 
 ### `services/model_gateway/main.py`
 
-- **行数**：334　**类**：5　**函数/方法**：8
+- **行数**：362　**类**：5　**函数/方法**：8
 - **职责**：模型网关服务 (Model Gateway)
 - **内部依赖**：`services.model_gateway.router`、`services.model_gateway.token_tracker`、`shared.utils.config`、`shared.utils.logging`
 
@@ -831,21 +870,21 @@
 |---:|---|---|---|
 | 33 | function | `lifespan` | `(app: FastAPI)` |
 | 61 | class | `ChatMessage` | `(BaseModel)` |
-| 66 | class | `ChatCompletionRequest` | `(BaseModel)` |
-| 76 | class | `ChatCompletionChoice` | `(BaseModel)` |
-| 82 | class | `ChatUsage` | `(BaseModel)` |
-| 88 | class | `ChatCompletionResponse` | `(BaseModel)` |
-| 100 | function | `health_check` | `()` |
-| 110 | function | `version` | `()` |
-| 120 | function | `list_models` | `()` |
-| 139 | function | `reload_config` | `(config: dict[str, str])` |
-| 183 | function | `chat_completions` | `(request: ChatCompletionRequest, http_request: Request)` |
-| 227 | function | `_sync_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,) → ChatCompletionResponse` |
-| 276 | function | `_stream_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,)` |
+| 75 | class | `ChatCompletionRequest` | `(BaseModel)` |
+| 88 | class | `ChatCompletionChoice` | `(BaseModel)` |
+| 94 | class | `ChatUsage` | `(BaseModel)` |
+| 100 | class | `ChatCompletionResponse` | `(BaseModel)` |
+| 112 | function | `health_check` | `()` |
+| 122 | function | `version` | `()` |
+| 132 | function | `list_models` | `()` |
+| 151 | function | `reload_config` | `(config: dict[str, str])` |
+| 195 | function | `chat_completions` | `(request: ChatCompletionRequest, http_request: Request)` |
+| 239 | function | `_sync_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,) → ChatCompletionResponse` |
+| 301 | function | `_stream_response` | `(request: ChatCompletionRequest, route_result, trace_id: str, start_time: float,)` |
 
 ### `services/model_gateway/router.py`
 
-- **行数**：304　**类**：3　**函数/方法**：10
+- **行数**：409　**类**：3　**函数/方法**：11
 - **职责**：模型路由器
 - **内部依赖**：`shared.utils.config`、`shared.utils.logging`
 
@@ -858,12 +897,13 @@
 | 61 | method | `ModelRouter.initialize` | `(self) → None` |
 | 105 | method | `ModelRouter.close` | `(self) → None` |
 | 110 | method | `ModelRouter.route` | `(self, request: ModelRouteRequest) → ModelRouteResult` |
-| 164 | method | `ModelRouter.complete` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 175 | method | `ModelRouter.complete_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
-| 188 | method | `ModelRouter._call_deepseek` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 214 | method | `ModelRouter._call_deepseek_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
-| 244 | method | `ModelRouter._call_claude` | `(self, route: ModelRouteResult, stream: bool = False) → dict` |
-| 275 | method | `ModelRouter._call_claude_stream` | `(self, route: ModelRouteResult) → AsyncIterator[dict]` |
+| 167 | method | `ModelRouter.complete` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, tools: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 201 | method | `ModelRouter.complete_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None,) → AsyncIterator[dict]` |
+| 216 | method | `ModelRouter._call_deepseek` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, tools: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 275 | method | `ModelRouter._call_deepseek_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None) → AsyncIterator[dict]` |
+| 306 | method | `ModelRouter._to_anthropic_messages` | `(messages: list[dict] \| None) → tuple[str, list[dict]]` |
+| 330 | method | `ModelRouter._call_claude` | `(self, route: ModelRouteResult, stream: bool = False, messages: list[dict] \| None = None, temperature: float \| None = None, max_tokens: int \| None = None,) → dict` |
+| 377 | method | `ModelRouter._call_claude_stream` | `(self, route: ModelRouteResult, messages: list[dict] \| None = None) → AsyncIterator[dict]` |
 
 ### `services/model_gateway/token_tracker.py`
 
@@ -1251,7 +1291,7 @@
 
 ### `shared/utils/config.py`
 
-- **行数**：206　**类**：1　**函数/方法**：13
+- **行数**：218　**类**：1　**函数/方法**：13
 - **职责**：GrassSea AI — 统一配置管理模块
 - **内部依赖**：`shared.utils.secrets`
 
@@ -1269,8 +1309,8 @@
 | 138 | method | `Settings.NEO4J_URI` | `(self) → str` |
 | 143 | method | `Settings.CELERY_BROKER_URL` | `(self) → str` |
 | 147 | method | `Settings.CELERY_RESULT_BACKEND` | `(self) → str` |
-| 182 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
-| 187 | function | `get_settings` | `() → Settings` |
+| 194 | method | `Settings.PROJECT_ROOT` | `(self) → Path` |
+| 199 | function | `get_settings` | `() → Settings` |
 
 ### `shared/utils/embedding.py`
 
