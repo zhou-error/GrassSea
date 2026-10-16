@@ -228,7 +228,7 @@ docker exec -it grasssea-postgres psql -U grasssea -d grasssea -c "\dt"
 **步骤 2**：查看当前迁移状态
 
 ```bash
-cd F:/GrassSea
+cd <项目根目录>
 alembic current
 # 如果还没有执行过迁移，会显示空
 ```

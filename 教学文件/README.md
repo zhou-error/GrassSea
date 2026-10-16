@@ -172,7 +172,7 @@
 
 ## 📚 配套资源
 
-- **GrassSea 项目仓库**：`F:\GrassSea\`
+- **GrassSea 项目仓库**：`<项目根目录>`
 - **GrassSea 项目框架设计文档**：`ProductDesign/项目框架.md`
 - **团队可维护文件清单**：`docs/PROJECT_FILES.md`
 - **Docker 开发环境指南**：`docs/DOCKER_GUIDE.md`

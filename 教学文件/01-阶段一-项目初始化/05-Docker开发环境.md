@@ -124,7 +124,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - type: bind
-        source: F:/GrassSea/docker-data/postgres
+        source: <项目根目录>/docker-data/postgres
         target: /var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
@@ -161,11 +161,11 @@ services:
 ```yaml
     volumes:
       - type: bind
-        source: F:/GrassSea/docker-data/postgres  # 宿主机路径
+        source: <项目根目录>/docker-data/postgres  # 宿主机路径
         target: /var/lib/postgresql/data          # 容器内路径
 ```
 
-`bind` 类型：将宿主机目录直接映射到容器内。效果是 PostgreSQL 写数据到 `/var/lib/postgresql/data` 时，实际写到了 `F:/GrassSea/docker-data/postgres`。即使容器被删除，数据还在。
+`bind` 类型：将宿主机目录直接映射到容器内。效果是 PostgreSQL 写数据到 `/var/lib/postgresql/data` 时，实际写到了 `<项目根目录>/docker-data/postgres`。即使容器被删除，数据还在。
 
 **初始化脚本**：
 ```yaml
@@ -200,7 +200,7 @@ PostgreSQL 镜像的约定：容器首次启动时，会自动执行 `/docker-en
       - "${MONGODB_PORT:-27017}:27017"
     volumes:
       - type: bind
-        source: F:/GrassSea/docker-data/mongodb
+        source: <项目根目录>/docker-data/mongodb
         target: /data/db
       - ./infrastructure/docker/mongodb/init:/docker-entrypoint-initdb.d
     healthcheck:
@@ -333,7 +333,7 @@ GrassSea 主要使用了两种卷类型：
 # 1. bind mount — 宿主机绝对路径
 volumes:
   - type: bind
-    source: F:/GrassSea/docker-data/postgres
+    source: <项目根目录>/docker-data/postgres
     target: /var/lib/postgresql/data
 
 # 2. named volume — Docker 管理，不在宿主机暴露
@@ -460,7 +460,7 @@ pg_isready -U grasssea -d grasssea
 **牢记**：`docker compose down` 不会删除 bind mount 的数据（在宿主机目录中），但 `docker compose down -v` 会删除 named volume。
 
 ### Q5: Windows 上路径问题
-GrassSea 的 `docker-compose.yml` 中使用了 `F:/GrassSea/docker-data/...` 这样的绝对路径。如果你克隆到其他盘符，需要修改这些路径。更好的做法是使用相对路径：
+GrassSea 的 `docker-compose.yml` 中使用了 `<项目根目录>/docker-data/...` 这样的绝对路径。如果你克隆到其他盘符，需要修改这些路径。更好的做法是使用相对路径：
 ```yaml
 volumes:
   - ./docker-data/postgres:/var/lib/postgresql/data

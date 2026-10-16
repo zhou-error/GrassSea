@@ -69,7 +69,7 @@
 │  │   :8003      │        │  └───────────────┘  │          │
 │  └──────────────┘        └────────────────────┘          │
 │                                                          │
-│  所有数据 → F:/GrassSea/docker-data/ (不占C盘!)           │
+│  所有数据 → <项目根目录>/docker-data/ (不占C盘!)           │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -121,7 +121,7 @@ docker-compose --version
 项目需要连接 AI 大模型（DeepSeek / Claude / OpenAI）。编辑 `.env` 文件（项目根目录），填写你的 API Key：
 
 ```bash
-# 用记事本打开 F:\GrassSea\.env
+# 用记事本打开 <项目根目录>\.env
 
 # 至少填一个 Key：
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx     # 你的 DeepSeek Key
@@ -140,7 +140,7 @@ DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx     # 你的 DeepSeek Key
 在项目根目录下打开终端，只需一条命令：
 
 ```bash
-cd F:\GrassSea
+cd <项目根目录>
 docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
 ```
 
@@ -148,7 +148,7 @@ docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
 1. 拉取所有镜像（PostgreSQL、MongoDB、Redis...）
 2. 构建你的应用镜像（Python 服务 + 前端）
 3. 启动所有服务
-4. 数据自动存到 `F:\GrassSea\docker-data\`
+4. 数据自动存到 `<项目根目录>\docker-data\`
 
 **首次启动需要下载镜像，大约 5-15 分钟（取决于网速）。请耐心等待。**
 
@@ -184,7 +184,7 @@ cd frontend && npm run dev    # 前端 :3000
 
 ## 6. 日常操作命令
 
-> 以下命令都在 `F:\GrassSea` 目录下执行
+> 以下命令都在 `<项目根目录>` 目录下执行
 
 ### 查看状态
 
@@ -268,14 +268,14 @@ cd frontend && npm run dev
 # 打开 http://localhost:3000
 ```
 
-**重点**：代码在本机（`F:\GrassSea\`）随时修改，Docker 数据库在后台稳定运行。两者互不干扰。
+**重点**：代码在本机（`<项目根目录>\`）随时修改，Docker 数据库在后台稳定运行。两者互不干扰。
 
 ---
 
 ## 8. 文件结构速查
 
 ```
-F:/GrassSea/
+<项目根目录>/
 │
 ├── docker-compose.yml          # 中间件编排（数据库、缓存等）
 ├── docker-compose.app.yml      # 应用服务编排（Python 微服务 + 前端）
@@ -376,7 +376,7 @@ docker system prune -a
 docker-compose -f docker-compose.yml -f docker-compose.app.yml down -v
 
 # 2. 清空数据目录（可选，会丢失所有数据）
-rm -rf F:/GrassSea/docker-data/*
+rm -rf <项目根目录>/docker-data/*
 
 # 3. 重新启动
 docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
@@ -389,7 +389,7 @@ docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
 docker system df
 
 # 数据文件占用
-# 右键 F:\GrassSea\docker-data → 属性
+# 右键 <项目根目录>\docker-data → 属性
 ```
 
 ---

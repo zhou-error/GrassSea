@@ -313,7 +313,7 @@ async def chat_completions(
 **步骤 1**：启动模型网关
 
 ```bash
-cd F:/GrassSea
+cd <项目根目录>
 # 确保 .env 中有 DEEPSEEK_API_KEY
 python -m uvicorn services.model_gateway.main:app --port 8004 --reload
 ```
