@@ -229,10 +229,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="grasssea", description="GrassSea 单进程启动器")
     parser.add_argument("--check", action="store_true", help="只做导入与配置自检，不启动服务")
     parser.add_argument("--verbose", action="store_true", help="输出更详细的日志")
+    parser.add_argument("--desktop", action="store_true", help="启动服务并打开桌面窗口")
+    parser.add_argument(
+        "--prefer",
+        default="auto",
+        choices=("auto", "pywebview", "browser-app", "web"),
+        help="桌面窗口方式（默认 auto：依次尝试）",
+    )
     args = parser.parse_args(argv)
 
     if args.check:
         return check()
+
+    if args.desktop:
+        from app.desktop import main as desktop_main
+
+        forwarded: list[str] = ["--prefer", args.prefer]
+        if args.verbose:
+            forwarded.append("--verbose")
+        return desktop_main(forwarded)
 
     try:
         return asyncio.run(run(verbose=args.verbose))

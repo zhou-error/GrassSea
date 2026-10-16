@@ -814,7 +814,7 @@ name = "clr-loader"
 version = "0.3.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
-    { name = "cffi", marker = "sys_platform == 'win32'" },
+    { name = "cffi" },
 ]
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e4/46/7eea92b6aa2d68af78e049cbecec5f757f1aad44ecdecdc16bbad7eead51/clr_loader-0.3.1.tar.gz", hash = "sha256:2e073e9aaf49d1ae2f56ecba27987ad5fb68be4bcd9dd34a5bed8f0e4e128366", size = 86805, upload-time = "2026-04-18T17:49:44.287Z" }
 wheels = [
@@ -1308,6 +1308,7 @@ dependencies = [
     { name = "pypdf2" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
+    { name = "pythonnet" },
     { name = "pywebview" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -1369,6 +1370,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-multipart", specifier = ">=0.0.6" },
+    { name = "pythonnet", specifier = ">=3.2" },
     { name = "pywebview", specifier = ">=6.2.1" },
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.2.0" },
@@ -4246,7 +4248,7 @@ name = "pythonnet"
 version = "3.2.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
-    { name = "clr-loader", marker = "sys_platform == 'win32'" },
+    { name = "clr-loader" },
 ]
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ef/34/98f38d7ca1e9eb684d297d1d6a9420f3f3a32f411eae82a7f25a2b783539/pythonnet-3.2.1.tar.gz", hash = "sha256:c86e8dd31268f6e0c48fcc4d6030041316d49ed2764a1cb6ea8c37876e07c572", size = 257852, upload-time = "2026-10-08T12:23:35.866Z" }
 wheels = [
