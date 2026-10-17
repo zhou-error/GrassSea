@@ -71,9 +71,72 @@ CONFIG_SCHEMA: list[dict] = [
 ]
 
 
+# ---- 英文标签（前端中英双语展示）----
+_LABEL_EN: dict[str, str] = {
+    "DEEPSEEK_API_KEY": "DeepSeek API Key",
+    "DEEPSEEK_BASE_URL": "DeepSeek Base URL",
+    "CLAUDE_API_KEY": "Claude API Key",
+    "CLAUDE_BASE_URL": "Claude Base URL",
+    "OPENAI_API_KEY": "OpenAI API Key",
+    "OPENAI_BASE_URL": "OpenAI Base URL",
+    "EMBEDDING_MODEL": "Embedding Model",
+    "EMBEDDING_DIM": "Embedding Dimension",
+    "EMBEDDING_PROVIDER": "Embedding Provider",
+    "VECTOR_BACKEND": "Vector Backend",
+    "rag_chunk_size": "Chunk Size (tokens)",
+    "rag_chunk_overlap": "Chunk Overlap (tokens)",
+    "rag_top_k": "Retrieval Top-K",
+    "max_context_turns": "Max Context Turns",
+    "session_timeout_minutes": "Session Timeout (minutes)",
+    "BRAVE_SEARCH_API_KEY": "Brave Search API Key",
+    "BING_SEARCH_API_KEY": "Bing Search API Key",
+    "TOOL_CALLING_ENABLED": "Tool Calling Enabled",
+    "TOOL_CALL_MAX_ROUNDS": "Tool Calling Max Rounds",
+    "TOOL_CALL_TIMEOUT_SECONDS": "Tool Call Timeout (seconds)",
+    "TOOL_CALL_MODEL": "Tool Calling Model",
+    "TOOL_CALL_EXPOSE_UNIMPLEMENTED": "Expose Unimplemented Tools",
+    "PDF_CONVERTER": "PDF Converter",
+    "DOC_DEFAULT_TEMPLATE": "Default Document Template",
+    "DOC_OUTPUT_DIR": "Document Output Directory",
+    "DATA_DIR": "Data Directory",
+}
+
+# ---- 补齐所有用户可编辑项（原 CONFIG_SCHEMA 仅覆盖早期一部分）----
+CONFIG_SCHEMA.extend([
+    {"key": "EMBEDDING_PROVIDER", "label": "Embedding 提供方", "label_en": "Embedding Provider",
+     "category": "模型", "type": "select", "options": ["auto", "local", "openai", "hash"]},
+    {"key": "VECTOR_BACKEND", "label": "向量后端", "label_en": "Vector Backend",
+     "category": "模型", "type": "select", "options": ["local", "milvus"]},
+    # 工具调用
+    {"key": "TOOL_CALLING_ENABLED", "label": "启用模型自主调用工具",
+     "label_en": "Tool Calling Enabled", "category": "工具调用", "type": "boolean"},
+    {"key": "TOOL_CALL_MAX_ROUNDS", "label": "工具调用最大轮次",
+     "label_en": "Tool Calling Max Rounds", "category": "工具调用", "type": "number"},
+    {"key": "TOOL_CALL_TIMEOUT_SECONDS", "label": "工具调用总超时（秒）",
+     "label_en": "Tool Call Timeout (seconds)", "category": "工具调用", "type": "number"},
+    {"key": "TOOL_CALL_MODEL", "label": "工具调用使用的模型",
+     "label_en": "Tool Calling Model", "category": "工具调用", "type": "text"},
+    {"key": "TOOL_CALL_EXPOSE_UNIMPLEMENTED", "label": "向模型暴露未实现工具",
+     "label_en": "Expose Unimplemented Tools", "category": "工具调用", "type": "boolean"},
+    # 文档
+    {"key": "PDF_CONVERTER", "label": "PDF 转换引擎", "label_en": "PDF Converter",
+     "category": "文档", "type": "select", "options": ["auto", "word", "libreoffice", "none"]},
+    {"key": "DOC_DEFAULT_TEMPLATE", "label": "默认排版模板名",
+     "label_en": "Default Document Template", "category": "文档", "type": "text"},
+    {"key": "DOC_OUTPUT_DIR", "label": "文档输出目录（留空用 data/outputs）",
+     "label_en": "Document Output Directory", "category": "文档", "type": "text"},
+    {"key": "DATA_DIR", "label": "数据目录（留空用 <项目根>/data）",
+     "label_en": "Data Directory", "category": "文档", "type": "text"},
+])
+
+# 统一补齐英文标签：已有 label_en 的保留，没有的按映射表回填
+for _item in CONFIG_SCHEMA:
+    _item.setdefault("label_en", _LABEL_EN.get(_item["key"], _item["key"]))
+
 class ConfigItemResponse(BaseModel):
     key: str
     label: str
+    label_en: str = ""
     value: str
     category: str
     type: str
@@ -212,7 +275,8 @@ async def get_config_schema():
             masked = value[:4] + "****" + value[-4:] if len(value) > 8 else "****"
             value = masked
         result.append(ConfigItemResponse(
-            key=item["key"], label=item["label"], value=value,
+            key=item["key"], label=item["label"],
+            label_en=item.get("label_en", item["key"]), value=value,
             category=item["category"], type=item.get("type", "text"),
             sensitive=item.get("sensitive", False),
             default=item.get("default"),
@@ -300,3 +364,74 @@ async def test_llm_connection():
             return {"status": "error", "message": f"HTTP {resp.status_code}: {resp.text[:200]}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+# ============================================================
+# Word 排版模板：读取 / 保存（前端可视化编辑）
+# ============================================================
+
+@router.get("/template")
+async def get_doc_template(name: str = ""):
+    """读取排版模板的原始 YAML 与结构化内容"""
+    import yaml
+
+    from shared.utils.docx_render import template_paths
+
+    settings = get_settings()
+    tpl_name = (name or getattr(settings, "DOC_DEFAULT_TEMPLATE", "") or "report").strip() or "report"
+    paths = template_paths(tpl_name)
+    active = paths["active_path"]
+    if not active:
+        return {"name": tpl_name, "paths": paths, "exists": False, "yaml_text": "", "data": {}}
+    try:
+        text = Path(active).read_text(encoding="utf-8")
+        data = yaml.safe_load(text) or {}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"模板读取失败：{exc}") from exc
+    return {"name": tpl_name, "paths": paths, "exists": True,
+            "active_path": active, "yaml_text": text, "data": data}
+
+
+@router.put("/template")
+async def save_doc_template(request: dict):
+    """保存排版模板
+
+    两种写法：
+      {"name": "report", "yaml_text": "..."}   直接保存原始 YAML（会先校验能否解析）
+      {"name": "report", "data": {...}}        保存结构化对象（自动转 YAML）
+    默认写入**用户覆盖**位置（<DATA_DIR>/templates/<name>.yaml），不修改仓库默认文件。
+    """
+    import yaml
+
+    from shared.utils.docx_render import template_paths
+
+    settings = get_settings()
+    tpl_name = str(request.get("name") or getattr(settings, "DOC_DEFAULT_TEMPLATE", "") or "report").strip() or "report"
+    if not tpl_name.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=400, detail="模板名只能包含字母、数字、下划线与连字符")
+
+    yaml_text = request.get("yaml_text")
+    data = request.get("data")
+    if yaml_text is None and data is None:
+        raise HTTPException(status_code=400, detail="需要提供 yaml_text 或 data")
+
+    try:
+        if yaml_text is not None:
+            parsed = yaml.safe_load(str(yaml_text)) or {}
+        else:
+            parsed = data or {}
+            yaml_text = yaml.safe_dump(parsed, allow_unicode=True, sort_keys=False)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"YAML 解析失败：{exc}") from exc
+
+    paths = template_paths(tpl_name)
+    target = Path(paths["user_path"])
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(yaml_text), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"模板保存失败：{exc}") from exc
+
+    logger.info("排版模板已保存", name=tpl_name, path=str(target))
+    return {"status": "ok", "name": tpl_name, "saved_to": str(target),
+            "restart_required": False, "note": "下次生成文档时自动生效"}

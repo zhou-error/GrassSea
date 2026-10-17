@@ -1,23 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Input, InputNumber, Select, Button, Typography, message, Alert, Collapse, Tag, Spin } from 'antd';
 import { SaveOutlined, ReloadOutlined, FolderOpenOutlined, FileWordOutlined } from '@ant-design/icons';
-import { docOpenFolderApi, docStatusApi } from '../api';
+import { docOpenFolderApi, docStatusApi, docTemplateApi, saveDocTemplateApi } from '../api';
 import type { DocStatus } from '../api';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
 
 interface ConfigItem {
-  key: string; label: string; value: string; category: string;
+  key: string; label: string; label_en?: string; value: string; category: string;
   type: string; sensitive: boolean; default?: string; options?: string[];
 }
 
 const categoryInfo: Record<string, { icon: string; desc: string }> = {
-  LLM:  { icon: '🔑', desc: '大语言模型 API 密钥与接口配置' },
-  模型: { icon: '🧠', desc: 'Embedding 模型与向量化参数' },
-  RAG:  { icon: '📚', desc: '检索增强生成参数调优' },
-  会话: { icon: '💬', desc: '对话会话管理设置' },
-  搜索: { icon: '🔍', desc: '联网搜索引擎 API 密钥' },
+  LLM:  { icon: '🔑', desc: '大语言模型 API 密钥与接口 / LLM API keys & endpoints' },
+  模型: { icon: '🧠', desc: 'Embedding 与向量后端 / Embedding & vector backend' },
+  RAG:  { icon: '📚', desc: '检索增强生成参数 / Retrieval parameters' },
+  会话: { icon: '💬', desc: '对话会话设置 / Session settings' },
+  搜索: { icon: '🔍', desc: '联网搜索引擎 API 密钥 / Search engine API keys' },
+  工具调用: { icon: '🛠️', desc: '模型自主调用工具 / Autonomous tool calling' },
+  文档: { icon: '📄', desc: 'Word 排版与 PDF 转换 / Word layout & PDF conversion' },
 };
 
 const SettingsPage: React.FC = () => {
@@ -29,8 +31,35 @@ const SettingsPage: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [docStatus, setDocStatus] = useState<DocStatus | null>(null);
   const [openingFolder, setOpeningFolder] = useState(false);
+  const [tplYaml, setTplYaml] = useState('');
+  const [tplActive, setTplActive] = useState('');
+  const [tplLoading, setTplLoading] = useState(false);
+  const [tplSaving, setTplSaving] = useState(false);
 
-  useEffect(() => { loadConfigs(); loadDocStatus(); }, []);
+  useEffect(() => { loadConfigs(); loadDocStatus(); loadTemplate(); }, []);
+
+  const loadTemplate = async () => {
+    setTplLoading(true);
+    try {
+      const res = await docTemplateApi();
+      setTplYaml(res.data.yaml_text || '');
+      setTplActive(res.data.active_path || res.data.paths?.user_path || '');
+    } catch { /* 忽略 */ }
+    finally { setTplLoading(false); }
+  };
+
+  const saveTemplate = async () => {
+    setTplSaving(true);
+    try {
+      const res = await saveDocTemplateApi({ yaml_text: tplYaml });
+      message.success('模板已保存：' + res.data.saved_to);
+      await loadTemplate();
+      await loadDocStatus();
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(detail || '模板保存失败');
+    } finally { setTplSaving(false); }
+  };
 
   const loadDocStatus = async () => {
     try {
@@ -109,6 +138,7 @@ const SettingsPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span>{categoryInfo[cat]?.icon || '⚙️'}</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{cat}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{categoryInfo[cat]?.desc?.split(' / ')[1] || ''}</span>
                 <Tag style={{ background: 'rgba(193,213,192,0.18)', border: 'none', color: '#3D5A45', borderRadius: 20 }}>
                   {items.length} 项
                 </Tag>
@@ -118,8 +148,11 @@ const SettingsPage: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 8 }}>
                 {items.map((item) => (
                   <div key={item.key} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                    <div style={{ width: 170, flexShrink: 0 }}>
+                    <div style={{ width: 210, flexShrink: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</div>
+                      {item.label_en && item.label_en !== item.label && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{item.label_en}</div>
+                      )}
                       <Text type="secondary" style={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}>{item.key}</Text>
                     </div>
                     <div style={{ flex: 1 }}>
@@ -252,6 +285,63 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* 排版模板编辑器 */}
+        <div style={{
+          marginTop: 24, padding: '16px 20px',
+          background: 'rgba(245,245,245,0.6)', borderRadius: 'var(--radius-md)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <FileWordOutlined style={{ color: '#3D5A45' }} />
+            <Text strong style={{ fontSize: 13.5 }}>排版模板</Text>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Layout Template</span>
+            {tplLoading && <Spin size="small" />}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.7 }}>
+            直接编辑 YAML 即可调整页边距、正文字体/字号/行距、各级标题样式与封面字号；保存后下次生成文档自动生效。
+            <br />
+            Edit the YAML below to change margins, body font/size/line-spacing, heading styles and cover font sizes.
+            Changes take effect on the next document generation.
+          </div>
+          <div style={{ fontSize: 11.5, marginBottom: 8, wordBreak: 'break-all' }}>
+            保存到 / Saved to：<Text code style={{ fontSize: 11 }}>{tplActive || '（尚未确定）'}</Text>
+          </div>
+          <Input.TextArea
+            value={tplYaml}
+            onChange={(e) => setTplYaml(e.target.value)}
+            autoSize={{ minRows: 12, maxRows: 24 }}
+            spellCheck={false}
+            style={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: 12, lineHeight: 1.6, borderRadius: 'var(--radius-sm)',
+              background: '#fff',
+            }}
+          />
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              type="primary"
+              size="small"
+              loading={tplSaving}
+              onClick={saveTemplate}
+              icon={<SaveOutlined />}
+              style={{ borderRadius: 'var(--radius-sm)' }}
+            >
+              保存模板 / Save
+            </Button>
+            <Button size="small" onClick={loadTemplate} icon={<ReloadOutlined />} style={{ borderRadius: 'var(--radius-sm)' }}>
+              重新加载 / Reload
+            </Button>
+            <Button
+              size="small"
+              onClick={() => openTemplateFolder(tplActive ? tplActive.replace(/[/\\][^/\\]+$/, '') : undefined)}
+              disabled={!docStatus?.desktop_mode}
+              icon={<FolderOpenOutlined />}
+              style={{ borderRadius: 'var(--radius-sm)' }}
+            >
+              打开目录 / Open Folder
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -311,6 +311,23 @@ export interface DocStatus {
 
 export const docStatusApi = () => api.get<DocStatus>('/doc/status');
 
+// ---- 排版模板（可视化编辑）----
+
+export interface DocTemplatePayload {
+  name: string;
+  paths: DocTemplateInfo;
+  exists: boolean;
+  active_path?: string;
+  yaml_text: string;
+  data: Record<string, unknown>;
+}
+
+export const docTemplateApi = (name?: string) =>
+  api.get<DocTemplatePayload>('/config/template', { params: name ? { name } : undefined });
+
+export const saveDocTemplateApi = (payload: { name?: string; yaml_text?: string; data?: Record<string, unknown> }) =>
+  api.put<{ status: string; saved_to: string; note: string }>('/config/template', payload);
+
 /** 在文件管理器中打开模板目录（仅桌面模式） */
 export const docOpenFolderApi = (path?: string) =>
   api.post<{ status: string; path: string }>('/doc/open-folder', path ? { path } : {});
