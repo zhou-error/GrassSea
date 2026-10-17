@@ -137,6 +137,17 @@ def template_paths(template_name: str = "report") -> dict:
     }
 
 
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """递归合并：只有显式给出的叶子键会被覆盖，未提到的键保留默认值"""
+    result = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def _apply_template(style: dict[str, Any], template_name: str | None) -> dict[str, Any]:
     """叠加模板默认值（data/templates/<name>.yaml）"""
     merged = {k: (v.copy() if isinstance(v, dict) else v) for k, v in DEFAULT_STYLE.items()}
@@ -160,11 +171,11 @@ def _apply_template(style: dict[str, Any], template_name: str | None) -> dict[st
                            searched=[str(c) for c in candidates])
             return merged
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for key, value in data.items():
-            if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key].update(value)
-            else:
-                merged[key] = value
+        if not isinstance(data, dict):
+            raise ValueError(f"模板根节点必须是映射，实际是 {type(data).__name__}")
+        # 递归合并：此前是浅合并，用户模板里只写 page.margin_cm.top 时，
+        # 会把 bottom/left/right 整块覆盖掉（页边距静默变成 0）。
+        merged = _deep_merge(merged, data)
         logger.info("已加载排版模板", name=template_name, path=str(path))
     except Exception as exc:  # noqa: BLE001
         logger.warning("模板加载失败，使用内置默认排版", error=str(exc))
