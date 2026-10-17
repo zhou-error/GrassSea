@@ -33,6 +33,7 @@ import httpx
 
 from shared.protocols.tool import BaseTool, ToolManifest, ToolStatus
 from shared.utils.config import Settings
+from services.agent_service.history import history
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -123,6 +124,22 @@ class ToolCallLoop:
         session_id: str,
         user_id: str | None = None,
     ) -> dict:
+        """执行工具调用循环（自动带上该会话的历史）"""
+        prior = history.get(session_id)
+        result = await self._run_with_history(message, session_id, user_id, prior)
+        # 只有真的拿到回答才记入历史，避免把失败也当成上下文
+        if result.get("answer"):
+            history.append(session_id, "user", message)
+            history.append(session_id, "assistant", str(result["answer"]))
+        return result
+
+    async def _run_with_history(
+        self,
+        message: str,
+        session_id: str,
+        user_id: str | None,
+        prior: list[dict],
+    ) -> dict:
         """执行工具调用循环
 
         返回:
@@ -144,6 +161,7 @@ class ToolCallLoop:
 
         messages: list[dict] = [
             {"role": "system", "content": TOOL_CALL_SYSTEM_PROMPT},
+            *prior,
             {"role": "user", "content": message},
         ]
         trace: list[dict] = []
