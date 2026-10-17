@@ -48,9 +48,12 @@ READ_MANIFEST = ToolManifest(
     tool_id="workspace_read",
     name="读取工作文件夹中的文件",
     description=(
-        "读取用户选定工作文件夹中某个文本文件的内容（UTF-8/GBK 自动识别）。"
-        "在需要依据用户现有资料作答、或需要参考已有文件格式时使用。"
-        "仅支持文本类文件；二进制与超大文件会返回错误。"
+        "读取用户选定工作文件夹中某个文件的内容，自动提取纯文本。"
+        "支持：文本类（txt/md/csv/json/yaml/代码等，UTF-8/GB18030 自动识别）、"
+        "PDF（提取文本层）、Word（.docx）、Excel（.xlsx/.xlsm，逐表转为 CSV 风格文本）。"
+        "在需要依据用户现有资料作答时使用——包括设计说明书、型值表、计算表格这类工程资料。"
+        "不支持：旧版 .doc/.xls（请先另存为新格式）、.dwg/.dxf（CAD 能力未实现）、"
+        "扫描版 PDF（无 OCR）。这些情况会返回明确原因与替代做法，不会返回乱码。"
     ),
     category=ToolCategory.FILE,
     input_schema={
@@ -65,6 +68,8 @@ READ_MANIFEST = ToolManifest(
         "properties": {
             "path": {"type": "string"},
             "size": {"type": "integer"},
+            "format": {"type": "string", "description": "pdf/docx/xlsx/text"},
+            "parser": {"type": "string", "description": "实际使用的解析器"},
             "chars": {"type": "integer"},
             "text": {"type": "string"},
             "truncated": {"type": "boolean"},

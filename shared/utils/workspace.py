@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from shared.utils.config import get_settings
+from shared.utils.text_extract import ExtractError, extract_text
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,7 +32,9 @@ SKIP_DIRS = {
     ".mypy_cache", ".ruff_cache", "target", "bin", "obj",
 }
 
-MAX_READ_BYTES = 2 * 1024 * 1024        # 单文件读取上限 2MB
+MAX_READ_BYTES = 2 * 1024 * 1024        # 纯文本单文件读取上限 2MB
+MAX_DOC_BYTES = 100 * 1024 * 1024       # 二进制文档（PDF/DOCX/XLSX）上限 100MB
+DOC_SUFFIXES = frozenset({".pdf", ".docx", ".xlsx", ".xlsm"})
 MAX_READ_CHARS = 60_000                 # 注入模型的字符上限
 MAX_WRITE_BYTES = 5 * 1024 * 1024       # 单文件写入上限 5MB
 MAX_LIST_ENTRIES = 500                  # 单次列目录条目上限
@@ -151,29 +154,30 @@ def read_file(rel_path: str, max_chars: int = MAX_READ_CHARS) -> dict:
         raise WorkspaceError(f"这是目录而不是文件：{rel_path}")
 
     size = target.stat().st_size
-    if size > MAX_READ_BYTES:
+    is_doc = target.suffix.lower() in DOC_SUFFIXES
+    limit = MAX_DOC_BYTES if is_doc else MAX_READ_BYTES
+    if size > limit:
         raise WorkspaceError(
-            f"文件过大（{size} 字节），单次读取上限 {MAX_READ_BYTES} 字节：{rel_path}"
+            f"文件过大（{size / 1048576:.1f} MB），上限 {limit / 1048576:.0f} MB：{rel_path}"
         )
 
-    raw = target.read_bytes()
-    text = ""
-    for enc in ("utf-8", "utf-8-sig", "gbk", "latin-1"):
-        try:
-            text = raw.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    if not text:
-        raise WorkspaceError(f"无法解码为文本（可能是二进制文件）：{rel_path}")
+    # 按格式分派：PDF / DOCX / XLSX 走真正的解析器。
+    # 此前这里用 ("utf-8","utf-8-sig","gbk","latin-1") 依次尝试解码，
+    # 而 latin-1 对任意字节都不会失败，导致二进制文件被「成功」解成乱码
+    # 并以 completed 返回——静默假成功，违反「诚实失败」原则。
+    try:
+        extracted = extract_text(target, max_chars=max_chars)
+    except ExtractError as exc:
+        raise WorkspaceError(str(exc)) from exc
 
-    truncated = len(text) > max_chars
     return {
         "path": rel_path,
         "size": size,
-        "chars": len(text),
-        "text": text[:max_chars],
-        "truncated": truncated,
+        "format": extracted["format"],
+        "parser": extracted["parser"],
+        "chars": extracted["chars"],
+        "text": extracted["text"],
+        "truncated": extracted["truncated"],
     }
 
 
