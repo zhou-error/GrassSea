@@ -302,6 +302,84 @@ async def workspace_select():
     return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
 
 
+@app.get("/diagnostics")
+async def export_diagnostics():
+    """打包诊断信息（日志 + 配置快照 + 环境），供反馈问题时使用
+
+    桌面形态没有日志聚合服务，用户遇到问题时无法提供有效信息。
+    这里把最近日志与脱敏后的配置打成一个 zip 直接下载。
+    """
+    import io
+    import json
+    import platform
+    import sys
+    import zipfile
+    from datetime import datetime
+
+    from fastapi.responses import StreamingResponse
+
+    from shared.utils.logging import get_log_dir
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # 1) 日志（最近的若干个）
+        try:
+            log_dir = get_log_dir()
+            if log_dir.exists():
+                for f in sorted(log_dir.glob("app.log*")):
+                    zf.write(f, f"logs/{f.name}")
+        except Exception:  # noqa: BLE001
+            pass
+
+        # 2) 脱敏后的配置（敏感项只留长度与来源，不写明文）
+        try:
+            envs = _read_env()
+            snapshot = {}
+            for item in CONFIG_SCHEMA:
+                key = item["key"]
+                raw = envs.get(key, "")
+                if item.get("sensitive"):
+                    snapshot[key] = f"<已设置，长度 {len(raw)}>" if raw else "<未设置>"
+                else:
+                    snapshot[key] = raw
+            zf.writestr("config.json", json.dumps(snapshot, ensure_ascii=False, indent=2))
+        except Exception as exc:  # noqa: BLE001
+            zf.writestr("config.json", json.dumps({"error": str(exc)}, ensure_ascii=False))
+
+        # 3) 环境信息
+        env_info = {
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "platform": platform.platform(),
+            "python": sys.version.split()[0],
+            "app_version": settings.APP_VERSION,
+            "desktop_mode": settings.DESKTOP_MODE,
+            "vector_backend": getattr(settings, "VECTOR_BACKEND", ""),
+            "pdf_converter": getattr(settings, "PDF_CONVERTER", ""),
+            "port": settings.CHAT_SERVICE_PORT,
+        }
+        zf.writestr("environment.json", json.dumps(env_info, ensure_ascii=False, indent=2))
+
+        # 4) 模板
+        try:
+            from shared.utils.docx_render import template_paths
+
+            name = (getattr(settings, "DOC_DEFAULT_TEMPLATE", "") or "report").strip() or "report"
+            paths = template_paths(name)
+            if paths.get("active_path"):
+                p = Path(paths["active_path"])
+                zf.write(p, f"templates/{p.name}")
+        except Exception:  # noqa: BLE001
+            pass
+
+    buf.seek(0)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="grasssea-diagnostics-{stamp}.zip"'},
+    )
+
+
 @app.get("/doc/status")
 async def doc_status():
     """Word/PDF 文档能力状态：转换引擎、模板路径、输出目录"""

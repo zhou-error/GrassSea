@@ -36,6 +36,40 @@ generator: AnswerGenerator | None = None
 
 
 @asynccontextmanager
+async def _check_vector_dimension() -> None:
+    """比对已存向量维度与当前 embedding 后端维度，不一致则明确提示"""
+    try:
+        from shared.utils.embedding import get_embedder
+
+        stored_dim = 0
+        try:
+            stored_dim = int(getattr(retriever._store, "dim", None) or 0)
+        except Exception:  # noqa: BLE001
+            stored_dim = 0
+        if not stored_dim:
+            records = await retriever._store.fetch_all(limit=1)
+            if not records:
+                return  # 空库，无需校验
+            stored_dim = 0
+            return
+
+        embedder = get_embedder(settings)
+        probe = await embedder.embed_one("dimension probe")
+        current_dim = len(probe)
+
+        if current_dim != stored_dim:
+            msg = (
+                f"向量维度不一致：索引中已存 {stored_dim} 维，当前 embedding 后端输出 {current_dim} 维。"
+                "请执行 uv run python scripts/reset_knowledge_base.py 后重新上传文档。"
+            )
+            logger.error("向量维度校验失败", stored_dim=stored_dim, current_dim=current_dim)
+            print(f"\n[警告] {msg}\n", flush=True)
+        else:
+            logger.info("向量维度校验通过", dim=current_dim)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("向量维度校验未能执行", error=str(exc))
+
+
 async def lifespan(app: FastAPI):
     """应用生命周期"""
     global ingestion_pipeline, retriever, reranker, generator
@@ -49,6 +83,9 @@ async def lifespan(app: FastAPI):
 
     await ingestion_pipeline.initialize()
     await retriever.initialize()
+
+    # 启动时校验向量维度：换过 embedding 模型只会在检索时报错，且报错不直观
+    await _check_vector_dimension()
 
     logger.info("Knowledge Service started", port=settings.KNOWLEDGE_SERVICE_PORT)
     yield

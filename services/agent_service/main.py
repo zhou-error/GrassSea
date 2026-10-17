@@ -40,6 +40,56 @@ tool_call_loop: ToolCallLoop | None = None
 active_connections: dict[str, WebSocket] = {}
 
 
+async def _validate_registration_consistency(agent_registry, registered_tools, exposed_tools) -> None:
+    """校验 planner / 工具白名单 与注册表是否一致，不一致只告警不阻断
+
+    这是「重命名后静默失效」的唯一防线：planner 用字面量引用 agent_id 与 tool_id，
+    一旦注册表里没有对应项，任务会安静地被标成 skipped，用户与开发者都难以定位。
+    """
+    try:
+        agents = await agent_registry.list_agents()
+    except Exception:  # noqa: BLE001
+        agents = []
+    registered_agent_ids = {a.get("agent_id") for a in agents}
+    registered_tool_ids = {m.tool_id for m in registered_tools}
+    exposed_ids = {m.tool_id for m in exposed_tools}
+
+    problems: list[str] = []
+
+    # planner 的能力路由
+    for _keywords, agent_id, action in getattr(TaskPlanner, "AGENT_ROUTES", []):
+        if registered_agent_ids and agent_id not in registered_agent_ids:
+            problems.append(f"planner.AGENT_ROUTES 引用了未注册的 agent: {agent_id}")
+
+    for action, tool_id in getattr(TaskPlanner, "TOOL_FOR_ACTION", {}).items():
+        if tool_id not in registered_tool_ids:
+            problems.append(f"planner.TOOL_FOR_ACTION 引用了未注册的工具: {tool_id}（action={action}）")
+
+    for tool_id in getattr(TaskPlanner, "IMPLEMENTED_TOOLS", set()):
+        if tool_id not in registered_tool_ids:
+            problems.append(f"planner.IMPLEMENTED_TOOLS 引用了未注册的工具: {tool_id}")
+
+    # 模型可见白名单
+    for tool_id in sorted(exposed_ids):
+        if tool_id not in registered_tool_ids:
+            problems.append(f"MODEL_EXPOSED_TOOLS 引用了未注册的工具: {tool_id}")
+
+    if problems:
+        for p in problems:
+            logger.error("启动一致性校验失败", problem=p)
+        print("\n[警告] 启动一致性校验发现问题（详见日志）：", flush=True)
+        for p in problems:
+            print(f"  - {p}", flush=True)
+        print("", flush=True)
+    else:
+        logger.info(
+            "启动一致性校验通过",
+            agents=len(registered_agent_ids),
+            tools=len(registered_tool_ids),
+            exposed=len(exposed_ids),
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global intent_classifier, task_planner, agent_registry, tool_registry, task_executor, tool_call_loop
@@ -59,6 +109,11 @@ async def lifespan(app: FastAPI):
 
     registered_tools = await tool_registry.list_tools()
     exposed_tools = await tool_call_loop.list_exposed_tools()
+
+    # ---- 启动一致性校验 ----
+    # planner 里的 agent_id / tool_id 全是字面量；重命名后只会表现为运行时静默 skipped，
+    # 桌面形态又没有监控兜底，因此必须在启动时把不一致喊出来。
+    await _validate_registration_consistency(agent_registry, registered_tools, exposed_tools)
     logger.info(
         "Agent Service started",
         port=settings.AGENT_SERVICE_PORT,

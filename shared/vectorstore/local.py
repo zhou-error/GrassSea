@@ -38,6 +38,12 @@ CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(document_id);
 """
 
 
+#: 当前 SQLite schema 版本。
+#: 改动表结构时：把版本号 +1，并在 _migrate() 里补一段迁移语句。
+#: 迁移前会自动把旧库复制成 .bak-<时间戳>，桌面形态没有 DBA 可依赖。
+SCHEMA_VERSION = 1
+
+
 class LocalVectorStore(VectorStore):
     """SQLite + numpy 的内置向量存储"""
 
@@ -70,6 +76,33 @@ class LocalVectorStore(VectorStore):
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        """按 PRAGMA user_version 升级 schema；升级前自动备份旧库"""
+        current = int(conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+        if current >= SCHEMA_VERSION:
+            return
+
+        # 老库要升级 → 先复制一份，出问题能退回去
+        if current > 0 and self._db_path is not None and self._db_path.exists():
+            import shutil
+            from datetime import datetime
+
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = self._db_path.with_name(f"{self._db_path.name}.bak-{stamp}")
+            try:
+                shutil.copy2(self._db_path, backup)
+                logger.info("已备份旧向量库", path=str(backup), from_version=current)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("旧向量库备份失败，仍继续迁移", error=str(exc))
+
+        # ---- 迁移区（按需追加）----
+        # v0 -> v1：初始版本，建表脚本已由 _SCHEMA 完成，无需 ALTER
+        # v1 -> v2：示例 —— 若将来新增字段，写 ALTER TABLE chunks ADD COLUMN xxx TEXT
+
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        conn.commit()
+        logger.info("向量库 schema 已就绪", version=SCHEMA_VERSION, previous=current)
+
     def _connect(self) -> sqlite3.Connection:
         assert self._db_path is not None
         conn = sqlite3.connect(str(self._db_path), timeout=30)
@@ -85,6 +118,7 @@ class LocalVectorStore(VectorStore):
             try:
                 conn.executescript(_SCHEMA)
                 conn.commit()
+                self._migrate(conn)
             finally:
                 conn.close()
             self._available = True
@@ -92,6 +126,11 @@ class LocalVectorStore(VectorStore):
         except Exception as e:  # noqa: BLE001
             self._available = False
             logger.warning("内置向量存储初始化失败", error=str(e))
+
+    @property
+    def dim(self) -> int | None:
+        """当前索引的向量维度（未知时返回 None），供启动校验使用"""
+        return self._dim
 
     async def close(self) -> None:
         self._cache_ids = []
