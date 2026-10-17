@@ -151,6 +151,7 @@ docs/              项目文档
 | [docs/WORD_DOC_GUIDE.md](docs/WORD_DOC_GUIDE.md) | Word 文档能力与模板 |
 | [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) | 服务器形态部署 |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | **待办清单**：已明确但暂缓的事项及理由 |
+| [docs/AUDIT-2026-10-17.md](docs/AUDIT-2026-10-17.md) | **鲁棒性审计报告**：S0-S3 缺陷、检查矩阵、未覆盖项 |
 | [教学文件/](教学文件/) | 13 阶段从零构建教程 |
 
 ---
