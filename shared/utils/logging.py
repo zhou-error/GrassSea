@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -29,6 +30,28 @@ def add_trace_context(
     if span_id:
         event_dict["span_id"] = span_id
     return event_dict
+
+
+def _resolve_log_dir() -> Path:
+    """日志目录：<DATA_DIR>/logs（默认 <项目根>/data/logs）
+
+    桌面形态没有日志聚合服务，必须落盘；否则控制台一关，
+    崩溃与异常就永久消失了。
+    """
+    try:
+        from shared.utils.config import get_settings
+
+        s = get_settings()
+        data_dir = (getattr(s, "DATA_DIR", "") or "").strip()
+        base = Path(data_dir) if data_dir else (s.PROJECT_ROOT / "data")
+    except Exception:  # noqa: BLE001
+        base = Path(__file__).resolve().parent.parent.parent / "data"
+    return base / "logs"
+
+
+def get_log_dir() -> Path:
+    """对外暴露日志目录（供设置页「导出诊断包」使用）"""
+    return _resolve_log_dir()
 
 
 def setup_logging(
@@ -79,6 +102,33 @@ def setup_logging(
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
+
+    # ---- 落盘（P0：桌面形态唯一的排障凭据）----
+    try:
+        from logging.handlers import RotatingFileHandler
+
+        log_dir = _resolve_log_dir()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_formatter = structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=shared_processors,
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(),
+            ],
+        )
+        file_handler = RotatingFileHandler(
+            log_dir / "app.log",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(file_formatter)
+        file_handler.setLevel(getattr(logging, level.upper(), logging.INFO))
+        root_logger.addHandler(file_handler)
+    except Exception:  # noqa: BLE001
+        # 落盘失败不应阻断服务启动
+        pass
+
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 
     # 降低第三方库日志噪音

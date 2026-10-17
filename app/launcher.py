@@ -135,8 +135,17 @@ async def serve(
     await server.serve()
 
 
-async def run(verbose: bool = False) -> int:
+async def run(verbose: bool = False, force: bool = False) -> int:
     info = prepare_environment()
+
+    # ---- 启动自检（P0）：失败即中止，不带病启动 ----
+    from app.preflight import format_report, run_all
+
+    report = run_all()
+    print(format_report(report), flush=True)
+    if not report["ok"] and not force:
+        return 2
+
     apps = import_apps()
 
     banner = [
@@ -180,6 +189,31 @@ async def run(verbose: bool = False) -> int:
         except (ValueError, OSError):  # 非主线程等情况
             pass
 
+    # ---- 看护（P0）：任一服务协程意外退出，必须让用户看见 ----
+    failed: dict[str, str] = {}
+
+    async def _watchdog() -> None:
+        while not stop.is_set():
+            await asyncio.sleep(2)
+            for task in tasks:
+                if not task.done() or stop.is_set():
+                    continue
+                name = task.get_name()
+                if name in failed:
+                    continue
+                if task.cancelled():
+                    failed[name] = "已取消"
+                else:
+                    exc = task.exception()
+                    failed[name] = f"{type(exc).__name__}: {exc}" if exc else "已退出"
+                logger.error("服务意外退出", service=name, reason=failed[name])
+                print(
+                    f"\n[警告] 服务 {name} 意外退出：{failed[name]}"
+                    f"（其余服务仍在运行；详细日志见 data/logs/app.log）\n",
+                    flush=True,
+                )
+
+    watchdog = asyncio.create_task(_watchdog(), name="__watchdog__")
     started = time.time()
     try:
         await stop.wait()
@@ -193,9 +227,12 @@ async def run(verbose: bool = False) -> int:
         alive = [t for t in tasks if not t.done()]
         for t in alive:
             t.cancel()
+        watchdog.cancel()
+        if failed:
+            print("运行期间有服务异常退出：" + "、".join(failed.keys()), flush=True)
         print(f"已停止（运行 {time.time() - started:.1f} 秒）", flush=True)
 
-    return 0
+    return 3 if failed else 0
 
 
 def check() -> int:
@@ -229,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="grasssea", description="GrassSea 单进程启动器")
     parser.add_argument("--check", action="store_true", help="只做导入与配置自检，不启动服务")
     parser.add_argument("--verbose", action="store_true", help="输出更详细的日志")
+    parser.add_argument("--force", action="store_true", help="忽略启动自检失败，强制启动")
     parser.add_argument("--desktop", action="store_true", help="启动服务并打开桌面窗口")
     parser.add_argument(
         "--no-window",
@@ -257,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
         return desktop_main(forwarded)
 
     try:
-        return asyncio.run(run(verbose=args.verbose))
+        return asyncio.run(run(verbose=args.verbose, force=args.force))
     except KeyboardInterrupt:
         return 0
 
