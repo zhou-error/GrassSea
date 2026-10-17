@@ -15,6 +15,7 @@ import {
 import type { AttachmentDescriptor, TaskStatusResponse } from '../api';
 import { useChatStore } from '../stores/chatStore';
 import DAGPanel from '../components/DAGPanel';
+import FilesPanel from '../components/FilesPanel';
 import ToolTraceCard from '../components/ToolTraceCard';
 import { bulletText, stepOutputLines, summaryLines } from '../components/stepOutput';
 import dayjs from 'dayjs';
@@ -529,8 +530,11 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 右侧 DAG 拓扑面板 */}
-      <DAGPanel taskId={taskId} />
+      {/* 右侧：生成文件 + DAG 拓扑 */}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <FilesPanel />
+        <DAGPanel taskId={taskId} />
+      </div>
     </>
   );
 };

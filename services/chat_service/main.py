@@ -406,6 +406,63 @@ async def list_backups_api():
     return {"total": len(items), "backups": items, "dir": str(folder)}
 
 
+@app.get("/files")
+async def list_output_files(limit: int = 200):
+    """列出可导出的文件（工作文件夹，或默认 data/outputs）
+
+    模型生成的 Word / PDF 落在磁盘上，前端需要能列出并下载，
+    否则用户只能自己去翻文件夹。
+    """
+    from tools.doc._common import output_root
+
+    root = output_root()
+    items: list[dict] = []
+    if root.exists():
+        for f in root.rglob("*"):
+            if not f.is_file():
+                continue
+            if f.name.startswith(".") or f.suffix.lower() in {".tmp", ".lock"}:
+                continue
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            items.append({
+                "path": f.relative_to(root).as_posix(),
+                "name": f.name,
+                "size": st.st_size,
+                "mtime": int(st.st_mtime),
+                "ext": f.suffix.lower(),
+            })
+    items.sort(key=lambda x: x["mtime"], reverse=True)
+    return {"root": str(root), "total": len(items), "files": items[:limit]}
+
+
+@app.get("/files/download")
+async def download_output_file(path: str):
+    """下载工作文件夹中的文件（严格的越界校验）"""
+    from fastapi.responses import FileResponse
+
+    from tools.doc._common import output_root
+
+    root = output_root().resolve()
+    rel = (path or "").strip().replace("\\", "/").lstrip("/")
+    if not rel:
+        raise HTTPException(status_code=400, detail="必须提供 path")
+    target = (root / rel).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="路径越界，已拒绝") from exc
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"文件不存在：{path}")
+    return FileResponse(
+        str(target),
+        filename=target.name,
+        media_type="application/octet-stream",
+    )
+
+
 @app.get("/doc/status")
 async def doc_status():
     """Word/PDF 文档能力状态：转换引擎、模板路径、输出目录"""
