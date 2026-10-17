@@ -159,7 +159,7 @@ GrassSea/
 │   └── model_gateway/          #   模型网关：main / router / token_tracker
 ├── tools/                      # 工具库（14 个 + 注册中心 + 引导模块）
 │   ├── base/registry.py        #   工具注册中心（状态机、超时、健康检查）
-│   ├── bootstrap.py            #   build_tool_registry()：实例化并注册全部 14 个工具
+│   ├── bootstrap.py            #   build_tool_registry()：实例化并注册全部 17 个工具
 │   ├── computation/            #   4 个真实计算工具：hydrostatics/stability/resistance/hull_transform
 │   ├── cad/ · file/ · compliance/ · report/   #   10 个诚实占位工具（返回 not_implemented）
 ├── shared/                     # 共享内核（被全部服务与 Agent/Tool 依赖）
@@ -315,7 +315,7 @@ graph LR
 | `shared/protocols/agent.py` | 标准库 | `agents/*`、`agent_service/registry.py`、`executor.py` |
 | `shared/protocols/tool.py` | 标准库 | `tools/*`、`tools/base/registry.py` |
 | `tools/base/registry.py` | `shared.protocols.tool`、`shared.utils.logging` | `tools/bootstrap.py`、`agent_service/executor.py` |
-| `tools/bootstrap.py` | **全部 14 个工具类** | `agent_service/main.py`（lifespan） |
+| `tools/bootstrap.py` | **全部 17 个工具类** | `agent_service/main.py`（lifespan） |
 | `services/agent_service/executor.py` | `agent_service/registry`、`shared.models.postgres.task`、`shared.protocols.agent`、`tools.base.registry` | `agent_service/main.py` |
 | `services/agent_service/planner.py` | `agent_service/intent`、`shared.utils.config` | `agent_service/main.py` |
 | `services/agent_service/tool_loop.py` | `shared.protocols.tool`、`shared.utils.config`、`model_gateway`（HTTP） | `agent_service/main.py`（lifespan + /chat） |
@@ -661,7 +661,7 @@ sequenceDiagram
 | 2 | 构造 `IntentClassifier` / `TaskPlanner` / `AgentRegistry` / `TaskExecutor` | `agent_service/main.py:46-50` |
 | 3 | `await agent_registry.initialize()` 注册并实例化 6 个 Agent | `agent_service/registry.py:28` |
 | 4 | `await intent_classifier.initialize()` | `intent.py:96` |
-| 5 | `tool_registry = await build_tool_registry()` 注册 14 个工具 | `tools/bootstrap.py:53`，调用点约 `agent_service/main.py:56` |
+| 5 | `tool_registry = await build_tool_registry()` 注册 17 个工具 | `tools/bootstrap.py:53`，调用点约 `agent_service/main.py:56` |
 | 6 | 记录启动日志（含 registered_tools 计数） | `agent_service/main.py` 日志 |
 
 ### 运行阶段

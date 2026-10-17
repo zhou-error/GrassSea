@@ -488,6 +488,11 @@ curl -X POST http://localhost:8001/chat -H "Content-Type: application/json" -d "
 | `todo_manager` / `web_search` | file | 未实现 | 否 |
 | `cad_draw` / `cad_parse` / `dwg_converter` | cad | 未实现 | 否 |
 | `report_gen` | report | 未实现 | 否 |
+| `workspace_list` / `workspace_read` / `workspace_write` | file | 已实现 | 是（**仅桌面模式**且用户已选目录） |
 
+> 共 **17 个工具**：5 个已实现的计算/核查工具 + 3 个工作文件夹工具 + 9 个诚实占位工具。
+> 工作文件夹工具的实现见 `tools/file/workspace.py`，是「带访问控制与大小上限」的完整范例，
+> 可作为开发其它需要读写外部资源类工具的模板。
+>
 > 未实现的工具同样遵循本文契约：`execute` 返回 `not_implemented` 并说明原因。
 > 可参考 `tools/file/pdf_parser.py` 作为「诚实占位」模板。
