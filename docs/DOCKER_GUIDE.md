@@ -1,5 +1,12 @@
 # GrassSea AI — Docker 部署与开发指南
 
+> ⚠️ **形态说明**：本文件只覆盖**服务器形态**（Docker Compose，需要 6 个中间件）。
+> 如果你只想在**本机直接使用**（不需要 Docker），请看 **[DESKTOP_GUIDE.md](./DESKTOP_GUIDE.md)**
+> —— 一条命令 `uv run python -m app.launcher --desktop` 即可。
+>
+> 两种形态的关键差别：桌面形态用 `VECTOR_BACKEND=local`（内置 SQLite 向量库，零外部依赖），
+> 本文的 Docker 形态用 `VECTOR_BACKEND=milvus`（由 `docker-compose.app.yml` 显式指定）。
+
 > 本文档假设你对 Docker 一无所知，从零开始解释每一个概念和操作。
 
 ---
