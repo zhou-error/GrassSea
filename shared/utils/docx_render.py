@@ -124,9 +124,14 @@ def _apply_template(style: dict[str, Any], template_name: str | None) -> dict[st
         settings = get_settings()
         data_dir = (getattr(settings, "DATA_DIR", "") or "").strip()
         base = Path(data_dir) if data_dir else (settings.PROJECT_ROOT / "data")
-        path = base / "templates" / f"{template_name}.yaml"
-        if not path.exists():
-            logger.warning("模板文件不存在，使用内置默认排版", path=str(path))
+        candidates = [
+            base / "templates" / f"{template_name}.yaml",
+            settings.PROJECT_ROOT / "templates" / f"{template_name}.yaml",
+        ]
+        path = next((c for c in candidates if c.exists()), None)
+        if path is None:
+            logger.warning("模板文件不存在，使用内置默认排版",
+                           searched=[str(c) for c in candidates])
             return merged
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for key, value in data.items():
