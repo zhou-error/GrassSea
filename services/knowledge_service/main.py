@@ -35,7 +35,6 @@ reranker: Reranker | None = None
 generator: AnswerGenerator | None = None
 
 
-@asynccontextmanager
 async def _check_vector_dimension() -> None:
     """比对已存向量维度与当前 embedding 后端维度，不一致则明确提示"""
     try:
@@ -70,6 +69,7 @@ async def _check_vector_dimension() -> None:
         logger.warning("向量维度校验未能执行", error=str(exc))
 
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期"""
     global ingestion_pipeline, retriever, reranker, generator
