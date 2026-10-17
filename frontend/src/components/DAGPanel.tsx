@@ -17,6 +17,10 @@ interface LaidOutStep {
   x: number;
   y: number;
   deps: string[];
+  /** 首选工具（tool_ids[0]），无工具时为空 */
+  toolId: string;
+  /** 指派给哪个 agent */
+  agentId: string;
 }
 
 interface GraphLayout {
@@ -53,10 +57,10 @@ const STATUS_TEXT: Record<string, string> = {
 
 const NODE_R = 16;
 const COL_W = 78;
-const ROW_H = 84;
+const ROW_H = 96;
 const PAD_X = 34;
 const PAD_TOP = 44;
-const PAD_BOTTOM = 34;
+const PAD_BOTTOM = 46;
 const MIN_W = 240;
 const MIN_H = 170;
 const MAX_LABEL_CHARS = 10;
@@ -66,6 +70,12 @@ const shortLabel = (step: TaskStep): string => {
   const raw = (step.action || step.description || step.step_id || '').trim() || '未命名';
   const chars = Array.from(raw);
   return chars.length > MAX_LABEL_CHARS ? chars.slice(0, MAX_LABEL_CHARS).join('') + '…' : raw;
+};
+
+/** 工具名过长时截断，保留可读性 */
+const shortTool = (toolId: string): string => {
+  if (!toolId) return '';
+  return toolId.length > 12 ? toolId.slice(0, 11) + '…' : toolId;
 };
 
 const isNotFound = (err: unknown): boolean =>
@@ -125,6 +135,8 @@ const buildLayout = (steps: TaskStep[], status: TaskStatusResponse | null): Grap
       const x = ids.length === 1 ? PAD_X + inner / 2 : PAD_X + (inner * i) / (ids.length - 1);
       const full = (step.action || step.description || step.step_id || '').trim() || step.step_id;
       nodes.push({
+        toolId: (step.tool_ids && step.tool_ids[0]) || '',
+        agentId: step.agent_id || '',
         id,
         label: shortLabel(step),
         fullLabel: full,
@@ -139,6 +151,32 @@ const buildLayout = (steps: TaskStep[], status: TaskStatusResponse | null): Grap
   return { nodes, width, height, parallelGroups: rowSizes.filter((n) => n > 1).length };
 };
 
+/** 详情卡片的一行 */
+const Row: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => (
+  <div style={{ display: 'flex', gap: 6 }}>
+    <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{label}：</span>
+    <span style={{ wordBreak: 'break-all', fontFamily: mono ? 'var(--font-mono)' : undefined }}>{value}</span>
+  </div>
+);
+
+/** 工具 / 依赖标签；highlight 表示这一步实际执行的就是它 */
+const Chip: React.FC<{ text: string; highlight?: boolean }> = ({ text, highlight }) => (
+  <span style={{
+    display: 'inline-block', margin: '0 4px 2px 0', padding: '0 5px',
+    borderRadius: 4, fontSize: 10, fontFamily: 'var(--font-mono)',
+    background: highlight ? 'rgba(193,213,192,0.45)' : 'rgba(193,213,192,0.16)',
+    border: highlight ? '1px solid var(--accent-sage)' : 'none',
+    color: 'var(--text-secondary)',
+  }}>{text}</span>
+);
+
+/** 输出摘要：截断长文本，避免撑破卡片 */
+const previewJson = (v: unknown, max = 160): string => {
+  let s: string;
+  try { s = typeof v === 'string' ? v : JSON.stringify(v); } catch { s = String(v); }
+  if (!s) return '—';
+  return s.length > max ? s.slice(0, max) + '…' : s;
+};
 const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
   const [hovered, setHovered] = useState<string | null>(null);
   const [status, setStatus] = useState<TaskStatusResponse | null>(null);
@@ -214,7 +252,25 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
     [status]
   );
   const layout = useMemo(() => buildLayout(steps, status), [steps, status]);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  /** 取某一步的执行结果（tool_id / reason / output 都在这里） */
+  const stepResultOf = (id: string): Record<string, unknown> | null => {
+    const results = (status?.result as { results?: Record<string, Record<string, unknown>> } | null)?.results;
+    return (results && results[id]) || null;
+  };
   const { nodes, width, height, parallelGroups } = layout;
+
+  /** 各状态计数，用于页脚摘要 */
+  const counts = useMemo(() => {
+    const c: Record<StepState, number> = { completed: 0, failed: 0, skipped: 0, running: 0, pending: 0 };
+    nodes.forEach((n) => { c[n.state] += 1; });
+    return c;
+  }, [nodes]);
+
+  const selectedNode = nodes.find((n) => n.id === selected) || null;
+  const selectedStep = steps.find((s) => s.step_id === selected) || null;
+  const selectedResult = selected ? stepResultOf(selected) : null;
 
   const statusKey = (status?.status || '').toLowerCase();
   const footer = loading
@@ -222,7 +278,8 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
     : notFound
       ? '任务不存在或已过期'
       : status
-        ? steps.length + ' 步 · ' + parallelGroups + ' 并行组 · 状态: ' + (STATUS_TEXT[statusKey] ?? '未知')
+        ? steps.length + ' 步 · ' + parallelGroups + ' 并行组 · ' + (STATUS_TEXT[statusKey] ?? '未知')
+          + '（成 ' + counts.completed + ' / 败 ' + counts.failed + ' / 跳 ' + counts.skipped + '）'
         : '暂无任务';
 
   const emptyState = (
@@ -245,7 +302,7 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
 
   return (
     <div style={{
-      width: 280,
+      width: 330,
       flexShrink: 0,
       background: 'var(--bg-white)',
       borderRadius: 'var(--radius-xl)',
@@ -257,7 +314,7 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
     }}>
       <h5 style={{ marginBottom: 4 }}>任务拓扑可视化</h5>
       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-        DAG 任务依赖流程图
+        DAG 依赖 · 节点下方为工具名 · 点击节点看工具链与结果
       </span>
 
       {!taskId && emptyState}
@@ -303,16 +360,26 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
                 key={node.id}
                 onMouseEnter={() => setHovered(node.id)}
                 onMouseLeave={() => setHovered(null)}
+                onClick={() => setSelected(selected === node.id ? null : node.id)}
                 style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
                 transform={hovered === node.id
                   ? 'translate(' + node.x + ', ' + (node.y - 2) + ')'
                   : 'translate(' + node.x + ', ' + node.y + ')'
                 }
               >
-                <title>{node.fullLabel + '（' + STATE_TEXT[node.state] + '）'}</title>
+                <title>
+                  {node.fullLabel + '（' + STATE_TEXT[node.state] + '）'
+                    + (node.agentId ? '\nAgent: ' + node.agentId : '')
+                    + (node.toolId ? '\n工具: ' + node.toolId : '')
+                    + '\n（点击查看详情）'}
+                </title>
                 {/* 光晕 */}
-                {hovered === node.id && (
+                {(hovered === node.id || selected === node.id) && (
                   <circle cx={0} cy={0} r={22} fill="rgba(181,214,224,0.18)" />
+                )}
+                {selected === node.id && (
+                  <circle cx={0} cy={0} r={NODE_R + 5} fill="none"
+                    stroke={STATE_COLORS[node.state]} strokeWidth={1} strokeDasharray="2 2" opacity={0.8} />
                 )}
                 {/* 节点圆 */}
                 <circle
@@ -339,12 +406,86 @@ const DAGPanel: React.FC<DAGPanelProps> = ({ taskId }) => {
                 >
                   {node.label}
                 </text>
+                {/* 工具名：让工具链直接可见，不必逐个点开 */}
+                {node.toolId && (
+                  <text
+                    y={30}
+                    textAnchor="middle"
+                    fill="var(--text-muted)"
+                    fontSize={8}
+                    fontFamily="var(--font-mono)"
+                    letterSpacing="0.02em"
+                  >
+                    {shortTool(node.toolId)}
+                  </text>
+                )}
               </g>
             ))}
           </svg>
         </div>
       )}
 
+      {/* 选中步骤详情：工具链 + 依赖 + 执行结果 */}
+      {taskId && !notFound && selectedNode && (
+        <div style={{
+          marginTop: 10, padding: '10px 12px',
+          background: 'var(--bg-white)',
+          border: '1px solid rgba(193,213,192,0.6)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: 11, lineHeight: 1.75,
+          maxHeight: 220, overflow: 'auto',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATE_COLORS[selectedNode.state], flexShrink: 0 }} />
+            <span style={{ fontWeight: 600, fontSize: 11.5 }}>{selectedNode.fullLabel}</span>
+            <span style={{ color: STATE_COLORS[selectedNode.state], fontSize: 10.5 }}>
+              {STATE_TEXT[selectedNode.state]}
+            </span>
+            <span
+              onClick={() => setSelected(null)}
+              style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}
+            >
+              ×
+            </span>
+          </div>
+
+          <Row label="步骤 ID" value={selectedNode.id} mono />
+          {selectedStep?.agent_id && <Row label="智能体" value={selectedStep.agent_id} mono />}
+          {selectedStep?.action && <Row label="动作" value={selectedStep.action} mono />}
+          {selectedStep?.description && <Row label="描述" value={selectedStep.description} />}
+
+          <div style={{ marginTop: 6 }}>
+            <span style={{ color: 'var(--text-muted)' }}>工具链：</span>
+            {selectedStep?.tool_ids && selectedStep.tool_ids.length > 0 ? (
+              selectedStep.tool_ids.map((t) => (
+                <Chip key={t} text={t} highlight={String(selectedResult?.tool_id || '') === t} />
+              ))
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>（无，走智能体）</span>
+            )}
+          </div>
+
+          {selectedStep?.dependencies && selectedStep.dependencies.length > 0 && (
+            <div style={{ marginTop: 4 }}>
+              <span style={{ color: 'var(--text-muted)' }}>依赖：</span>
+              {selectedStep.dependencies.map((d) => <Chip key={d} text={d} />)}
+            </div>
+          )}
+
+          {selectedResult && (
+            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed rgba(193,213,192,0.5)' }}>
+              {selectedResult.tool_id != null && <Row label="实际执行" value={String(selectedResult.tool_id)} mono />}
+              {selectedResult.status != null && <Row label="返回状态" value={String(selectedResult.status)} mono />}
+              {(selectedResult.reason != null || selectedResult.message != null) && (
+                <Row label="说明" value={String(selectedResult.reason ?? selectedResult.message)} />
+              )}
+              {selectedResult.output != null && (
+                <Row label="输出摘要" value={previewJson(selectedResult.output)} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{
         marginTop: 8,
         padding: '8px 12px',
