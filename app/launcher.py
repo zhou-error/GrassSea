@@ -132,7 +132,18 @@ async def serve(
     # 统一由本模块处理信号，避免四个实例互相覆盖
     server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
     servers[name] = server
-    await server.serve()
+    try:
+        await server.serve()
+    except SystemExit as exc:
+        # uvicorn 启动失败时会 sys.exit(3)。SystemExit 在 asyncio 任务里会
+        # 终止整个进程，把其余三个服务一起带走。这里转成普通异常，
+        # 让看护逻辑记录并只标记这一个服务失败。
+        reason = f"启动失败（uvicorn exit {exc.code}）"
+        print(
+            f"\n[警告] 服务 {name}（端口 {port}）{reason}；其余服务继续运行。\n",
+            flush=True,
+        )
+        raise RuntimeError(reason) from None
 
 
 async def run(verbose: bool = False, force: bool = False) -> int:
@@ -235,8 +246,32 @@ async def run(verbose: bool = False, force: bool = False) -> int:
     return 3 if failed else 0
 
 
+async def _lifespan_smoke(apps: list[tuple[str, Any, int]]) -> int:
+    """逐个跑一次 lifespan 的 startup + shutdown
+
+    导入成功不代表能启动：曾发生过 @asynccontextmanager 被顶掉，
+    导入全绿但实际启动 TypeError 的事故。这里用最小代价把这类问题
+    挡在 --check 阶段，而不是等用户双击时黑窗闪退。
+    """
+    failures = 0
+    for name, app, port in apps:
+        try:
+            lifespan = app.router.lifespan_context
+        except AttributeError:
+            print(f"  [SKIP] {name:<20} :{port} 无 lifespan")
+            continue
+        try:
+            async with lifespan(app):
+                pass
+            print(f"  [OK]   {name:<20} :{port} lifespan")
+        except Exception as exc:  # noqa: BLE001
+            failures += 1
+            print(f"  [FAIL] {name:<20} :{port} lifespan {type(exc).__name__}: {exc}")
+    return failures
+
+
 def check() -> int:
-    """自检：准备环境 + 导入四个服务 + 打印关键配置，不监听端口"""
+    """自检：准备环境 + 导入四个服务 + 跑一次 lifespan + 打印关键配置，不监听端口"""
     info = prepare_environment()
     print("=" * 68)
     print("  单进程形态自检")
@@ -257,8 +292,18 @@ def check() -> int:
             failures += 1
             print(f"  [FAIL] {name:<20} {type(exc).__name__}: {exc}")
 
+    # ---- lifespan 冒烟（导入通过后再跑，避免掩盖导入错误）----
+    if failures == 0:
+        print("-" * 68)
+        try:
+            apps = import_apps()
+            failures += asyncio.run(_lifespan_smoke(apps))
+        except Exception as exc:  # noqa: BLE001
+            failures += 1
+            print(f"  [FAIL] 无法构建应用实例 {type(exc).__name__}: {exc}")
+
     print("-" * 68)
-    print("自检通过" if failures == 0 else f"自检失败：{failures} 个服务无法导入")
+    print("自检通过" if failures == 0 else f"自检失败：{failures} 项问题")
     return 0 if failures == 0 else 1
 
 
