@@ -289,4 +289,30 @@ export interface ToolListResponse {
 
 export const listToolsApi = () => api.get<ToolListResponse>('/tools');
 
+// ---- Word / PDF 文档能力 ----
+
+export interface DocTemplateInfo {
+  name: string;
+  user_path: string;
+  repo_path: string;
+  active_path: string;
+  user_exists: boolean;
+  repo_exists: boolean;
+  base_dir: string;
+}
+
+export interface DocStatus {
+  pdf_converter: string;
+  converters: { word: boolean; libreoffice: boolean; libreoffice_path: string };
+  template: DocTemplateInfo;
+  output_dir: string;
+  desktop_mode: boolean;
+}
+
+export const docStatusApi = () => api.get<DocStatus>('/doc/status');
+
+/** 在文件管理器中打开模板目录（仅桌面模式） */
+export const docOpenFolderApi = (path?: string) =>
+  api.post<{ status: string; path: string }>('/doc/open-folder', path ? { path } : {});
+
 export default api;

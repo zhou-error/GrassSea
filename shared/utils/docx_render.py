@@ -111,6 +111,32 @@ def _enable_update_fields(doc) -> None:
     settings.append(update)
 
 
+def template_paths(template_name: str = "report") -> dict:
+    """返回模板的候选路径与实际生效路径（供状态接口使用）"""
+    from shared.utils.config import get_settings
+
+    settings = get_settings()
+    data_dir = (getattr(settings, "DATA_DIR", "") or "").strip()
+    base = Path(data_dir) if data_dir else (settings.PROJECT_ROOT / "data")
+    user_path = base / "templates" / f"{template_name}.yaml"
+    repo_path = settings.PROJECT_ROOT / "templates" / f"{template_name}.yaml"
+    if user_path.exists():
+        active = user_path
+    elif repo_path.exists():
+        active = repo_path
+    else:
+        active = None
+    return {
+        "name": template_name,
+        "user_path": str(user_path),
+        "repo_path": str(repo_path),
+        "active_path": str(active) if active else "",
+        "user_exists": user_path.exists(),
+        "repo_exists": repo_path.exists(),
+        "base_dir": str(base),
+    }
+
+
 def _apply_template(style: dict[str, Any], template_name: str | None) -> dict[str, Any]:
     """叠加模板默认值（data/templates/<name>.yaml）"""
     merged = {k: (v.copy() if isinstance(v, dict) else v) for k, v in DEFAULT_STYLE.items()}

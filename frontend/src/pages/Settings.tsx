@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Input, InputNumber, Select, Button, Typography, message, Alert, Collapse, Tag, Spin } from 'antd';
-import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, FolderOpenOutlined, FileWordOutlined } from '@ant-design/icons';
+import { docOpenFolderApi, docStatusApi } from '../api';
+import type { DocStatus } from '../api';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
@@ -25,8 +27,30 @@ const SettingsPage: React.FC = () => {
   const [edited, setEdited] = useState<Record<string, string>>({});
   const [testMsg, setTestMsg] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [docStatus, setDocStatus] = useState<DocStatus | null>(null);
+  const [openingFolder, setOpeningFolder] = useState(false);
 
-  useEffect(() => { loadConfigs(); }, []);
+  useEffect(() => { loadConfigs(); loadDocStatus(); }, []);
+
+  const loadDocStatus = async () => {
+    try {
+      const res = await docStatusApi();
+      setDocStatus(res.data);
+    } catch { /* 后端未就绪时忽略 */ }
+  };
+
+  const openTemplateFolder = async (path?: string) => {
+    setOpeningFolder(true);
+    try {
+      const res = await docOpenFolderApi(path);
+      message.success('已打开：' + res.data.path);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(detail || '无法打开文件夹（该功能仅桌面模式可用）');
+    } finally {
+      setOpeningFolder(false);
+    }
+  };
 
   const loadConfigs = async () => {
     setLoading(true);
@@ -167,6 +191,67 @@ const SettingsPage: React.FC = () => {
             {testMsg && <Alert type={testMsg.type} message={testMsg.msg} showIcon style={{ flex: 1 }} />}
           </div>
         </div>
+
+        {/* Word / PDF 文档能力 */}
+        {docStatus && (
+          <div style={{
+            marginTop: 24, padding: '16px 20px',
+            background: 'rgba(245,245,245,0.6)', borderRadius: 'var(--radius-md)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <FileWordOutlined style={{ color: '#3D5A45' }} />
+              <Text strong style={{ fontSize: 13.5 }}>Word 文档能力</Text>
+              <Tag color={docStatus.converters.word || docStatus.converters.libreoffice ? 'green' : 'orange'}>
+                PDF 转换：{docStatus.pdf_converter}
+              </Tag>
+            </div>
+
+            <div style={{ fontSize: 12.5, lineHeight: 2, color: '#3D4A40' }}>
+              <div>
+                转换引擎：
+                <Tag color={docStatus.converters.word ? 'green' : 'default'}>Word</Tag>
+                <Tag color={docStatus.converters.libreoffice ? 'green' : 'default'}>LibreOffice</Tag>
+                {!docStatus.converters.word && !docStatus.converters.libreoffice && (
+                  <Text type="danger" style={{ fontSize: 12 }}>两者均不可用，PDF 转换会报错</Text>
+                )}
+              </div>
+              <div style={{ wordBreak: 'break-all' }}>
+                排版模板：
+                <Text code style={{ fontSize: 11.5 }}>
+                  {docStatus.template.active_path || '未找到模板文件（将使用内置默认排版）'}
+                </Text>
+                {docStatus.template.user_exists && <Tag style={{ marginLeft: 6 }}>用户覆盖</Tag>}
+              </div>
+              <div style={{ wordBreak: 'break-all' }}>
+                仓库默认模板：<Text code style={{ fontSize: 11.5 }}>{docStatus.template.repo_path}</Text>
+              </div>
+              <div style={{ wordBreak: 'break-all' }}>
+                输出目录：<Text code style={{ fontSize: 11.5 }}>{docStatus.output_dir}</Text>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                icon={<FolderOpenOutlined />}
+                loading={openingFolder}
+                disabled={!docStatus.desktop_mode}
+                onClick={() => openTemplateFolder(docStatus.template.base_dir)}
+                style={{ borderRadius: 'var(--radius-sm)' }}
+              >
+                打开模板文件夹
+              </Button>
+              <Button size="small" onClick={loadDocStatus} icon={<ReloadOutlined />} style={{ borderRadius: 'var(--radius-sm)' }}>
+                刷新状态
+              </Button>
+              {!docStatus.desktop_mode && (
+                <Text type="secondary" style={{ fontSize: 11.5, alignSelf: 'center' }}>
+                  「打开文件夹」仅桌面模式可用
+                </Text>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

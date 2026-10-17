@@ -302,6 +302,57 @@ async def workspace_select():
     return {"selected": True, "root": str(root), "tree": info["lines"], "truncated": info["truncated"]}
 
 
+@app.get("/doc/status")
+async def doc_status():
+    """Word/PDF 文档能力状态：转换引擎、模板路径、输出目录"""
+    from shared.utils.docx_render import template_paths
+    from shared.utils.pdf_convert import available_converters
+    from tools.doc._common import output_root
+
+    name = (getattr(settings, "DOC_DEFAULT_TEMPLATE", "") or "report").strip() or "report"
+    paths = template_paths(name)
+    try:
+        out_dir = str(output_root())
+    except Exception:  # noqa: BLE001
+        out_dir = ""
+    return {
+        "pdf_converter": (getattr(settings, "PDF_CONVERTER", "auto") or "auto"),
+        "converters": available_converters(),
+        "template": paths,
+        "output_dir": out_dir,
+        "desktop_mode": settings.DESKTOP_MODE,
+    }
+
+
+@app.post("/doc/open-folder")
+async def doc_open_folder(payload: dict):
+    """在系统文件管理器中打开模板目录（仅桌面模式）"""
+    _require_desktop()
+    import os
+    import subprocess
+    import sys
+
+    from shared.utils.docx_render import template_paths
+
+    target = str((payload or {}).get("path") or "").strip()
+    if not target:
+        name = (getattr(settings, "DOC_DEFAULT_TEMPLATE", "") or "report").strip() or "report"
+        target = template_paths(name)["base_dir"]
+    folder = Path(target)
+    if not folder.exists():
+        raise HTTPException(status_code=404, detail=f"目录不存在：{target}")
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(str(folder))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(folder)])
+        else:
+            subprocess.Popen(["xdg-open", str(folder)])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"无法打开目录：{exc}") from exc
+    return {"status": "ok", "path": str(folder)}
+
+
 @app.get("/tools")
 async def proxy_tools():
     """转发工具清单到智能体编排服务 (8002)
