@@ -10,6 +10,19 @@
 > 1. 对话服务端口是 **8001**（旧稿曾写 8011）；
 > 2. `alembic.ini` 位于**项目根目录**（不在 `shared/models/`），且连接串由 `env.py` 从 `.env` 读取。
 
+> 🆕 **2026 年 10 月架构重构提示（教学文档早于此变更）**
+>
+> 项目已演进，本教程以下内容与**当前代码**存在差异，学习时请对照仓库实况：
+>
+> | 教程中的旧说法 | 当前实现 |
+> |---|---|
+> | 向量存储固定用 Milvus | 已抽象为**可插拔后端**：`VECTOR_BACKEND=local`（内置 SQLite，零依赖）/ `milvus` |
+> | 仅 Docker 部署 | 新增**桌面形态**：`uv run python -m app.launcher --desktop`，不需要 Docker 与任何中间件 |
+> | 工具由规则派发 | 已支持**模型自主调用工具**（function calling），见 `docs/TOOL_DEVELOPMENT_GUIDE.md` |
+> | 无 Word/PDF 能力 | 已实现 Word 新建/修改/排版/转 PDF，见 `docs/WORD_DOC_GUIDE.md` |
+>
+> 权威说明请看：`README.md`、`docs/ARCHITECTURE.md`、`docs/DESKTOP_GUIDE.md`。
+
 > 本教学文件以 **GrassSea（白草沧智）** 项目为蓝本，手把手教你从 Python 基础进阶开始，
 > 逐步构建一个完整的 **FastAPI 微服务 + React 前端 + AI 多智能体 + RAG 知识库** 全栈项目。
 

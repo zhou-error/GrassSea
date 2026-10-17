@@ -18,9 +18,13 @@
 | 数据模型（8 张 PG 表 + 4 张时序超表 + 6 个 Mongo 集合） | ✅ **已实测建表成功** |
 | 意图识别 / 任务规划 DAG / 会话状态机 | ✅ 可用 |
 | 6 个业务 Agent | ✅ 全部注册并实例化 |
-| 14 个工具 | ✅ 全部注册；4 个计算工具为真实实现，其余 10 个诚实返回未实现状态 |
+| **20 个工具** | ✅ 全部注册；**12 个为模型可调用**（5 计算 + 3 工作文件夹 + 4 文档）；其余 8 个诚实返回未实现 |
+| **模型自主调用工具**（function calling） | ✅ 模型自行决定调用哪个工具，失败自动回落规则规划 |
+| **Word 文档能力** | ✅ 新建 / 修改（追加·占位符·按标题重写·重排）/ 全排版 / 转 PDF；排版模板可在前端编辑 |
+| **配置可视化编辑** | ✅ 26 项可编辑配置全部暴露到设置页，中英双语标签 |
+| **桌面形态** | ✅ 单进程启动，零 Docker、零外部中间件（内置 SQLite 向量库） |
 | 任务执行引擎 | ✅ 真实派发到 Agent / 工具，支持取消 |
-| RAG 检索链路（向量化 → Milvus → 混合检索 → 带引用生成） | ✅ **已端到端实测可用**（本地向量，无需 API Key） |
+| RAG 检索链路（向量化 → 向量库 → 混合检索 → 带引用生成） | ✅ **已端到端实测可用**；向量后端可切换 local（内置）/ milvus |
 | 前端 4 页面 | ⚠️ 需 npm install；无登录、无实时推送通道 |
 | 登录 / RBAC | ❌ 未实现（个人使用暂不需要） |
 | Celery 异步队列 / Neo4j 知识图谱 | ❌ 未实现（仅保留依赖与容器配置） |
@@ -241,7 +245,7 @@ grasssea/
 │   ├── agent_service/          #   编排：intent / planner / fsm / executor / registry
 │   ├── knowledge_service/      #   RAG：ingestion / retrieval / reranker / generator
 │   └── model_gateway/          #   模型网关：router / token_tracker
-├── tools/                      # 工具库（注册中心 + 13 个工具）
+├── tools/                      # 工具库（注册中心 + 20 个工具）
 ├── shared/                     # 共享库
 │   ├── models/                 #   数据模型（postgres / timescale / mongodb / repository）
 │   ├── protocols/              #   Agent / Tool 抽象协议
@@ -292,7 +296,8 @@ grasssea/
 >
 > 然后重新上传文档。集合 schema 升级（如新增 document_id 字段）后也需要执行一次。
 
-在线修改配置：PUT /config/update（对话服务）；GET /config/schema 查看可配置项。
+在线修改配置：PUT /config/update（对话服务）；GET /config/schema 查看可配置项（26 项，含中英双语标签）。
+排版模板可在设置页直接编辑：GET /config/template、PUT /config/template。
 
 > ⚠️ 配置管理 API 与服务端点当前**没有鉴权**。个人使用请只监听本机，不要暴露到公网。
 
