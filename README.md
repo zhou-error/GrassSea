@@ -15,11 +15,17 @@
 | **20 个工具**，其中 **12 个对模型可见**（5 计算 + 3 工作文件夹 + 4 文档） | ✅ 注册并实测 |
 | **模型自主调用工具**（function calling） | ✅ 模型自选工具，失败自动回落规则规划 |
 | **RAG 知识库**（混合检索 + 重排 + 带引用生成） | ✅ 端到端实测；向量后端可切换 |
+| **入库格式**：PDF / TXT / MD / **XLSX** / **DOCX** | ✅ 实测（扫描版 PDF 暂不支持 OCR） |
 | **Word 文档**（新建 / 修改 / 全排版 / 转 PDF） | ✅ 实测，含排版模板 |
-| **配置可视化编辑**（26 项，中英双语） | ✅ 设置页可改 |
+| **配置可视化编辑**（26 项，中英双语） | ✅ 设置页可改，类型安全 |
+| **启动自检**（密钥可解密 / 目录可写 / 端口可用） | ✅ 失败即中止并给出恢复指引（`--force` 可跳过） |
+| **日志落盘** | ✅ `data/logs/app.log`（10MB × 5 滚动） |
+| **一键备份 / 恢复** | ✅ `data/` + 密钥 + `.env`；恢复前自动备份当前状态 |
+| **诊断包导出** | ✅ 日志 + 脱敏配置 + 环境信息（不含明文密钥） |
+| **启动一致性校验** | ✅ planner 引用的 agent/tool 必须存在，不一致即告警 |
 | 前端 4 页面（项目 / 知识库 / 智能体 / 设置） | ✅ 可用 |
 | 登录 / RBAC / 多租户 | ❌ 未实现（个人使用定位，暂不需要） |
-| PDF/XLSX/OCR 解析、CAD、报告模板引擎外的专业能力 | ❌ 诚实返回「未实现」，不产出伪造结果 |
+| **OCR（扫描版 PDF）**、CAD、部分专业能力 | ❌ 诚实返回「未实现」，不产出伪造结果（见 [BACKLOG](docs/BACKLOG.md)） |
 
 > **诚实失败是本项目的硬约定**：能力未实现时返回明确原因，绝不编造文件路径、规范条款号或文献条目。
 
@@ -144,6 +150,7 @@ docs/              项目文档
 | [docs/TOOL_DEVELOPMENT_GUIDE.md](docs/TOOL_DEVELOPMENT_GUIDE.md) | 如何新增一个工具 |
 | [docs/WORD_DOC_GUIDE.md](docs/WORD_DOC_GUIDE.md) | Word 文档能力与模板 |
 | [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) | 服务器形态部署 |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | **待办清单**：已明确但暂缓的事项及理由 |
 | [教学文件/](教学文件/) | 13 阶段从零构建教程 |
 
 ---
@@ -161,7 +168,15 @@ cd frontend && npm install && npm run dev
 uv run python -m app.launcher --check
 uv run pytest
 uv run ruff check .
+
+# 数据备份与恢复
+uv run python scripts/backup.py            # 备份到 data/backups/
+uv run python scripts/backup.py --list     # 查看已有备份
+uv run python scripts/restore.py --list    # 恢复（会先自动备份当前状态）
 ```
+
+> 启动时会自动跑一次自检（密钥 / 数据目录 / 端口）。失败会中止启动并打印恢复指引；
+> 确认要强行启动可加 `--force`。日志固定在 `data/logs/app.log`。
 
 > 桌面形态下前端改动需 `npm run build` 才会被 `frontend/dist` 托管。
 
