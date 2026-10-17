@@ -94,7 +94,15 @@ def _extract_docx(target: Path) -> tuple[str, str]:
     except ImportError as exc:
         raise ExtractError("解析 .docx 需要 python-docx，请先安装") from exc
 
-    doc = Document(str(target))
+    try:
+        doc = Document(str(target))
+    except Exception as exc:  # noqa: BLE001
+        # 常见于：把旧版 .doc 直接改名成 .docx，或文件损坏/只是主题占位文件
+        raise ExtractError(
+            f"「{target.name}」不是有效的 Word(.docx) 文件（{type(exc).__name__}）。"
+            "常见原因：① 它其实是旧版 .doc 只改了扩展名；② 文件损坏或是占位/主题文件。"
+            "请在 Word 中打开后「另存为」.docx 再重试。"
+        ) from exc
     parts: list[str] = []
     for para in doc.paragraphs:
         t = para.text.strip()
