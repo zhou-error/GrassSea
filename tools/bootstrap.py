@@ -25,6 +25,9 @@ from tools.computation.hull_transform import HullTransformTool
 from tools.file.ocr_engine import OcrEngineTool
 from tools.file.pdf_parser import PdfParserTool
 from tools.file.todo_manager import TodoManagerTool
+from tools.doc.docx_create import DocxCreateTool
+from tools.doc.docx_edit import DocxEditTool
+from tools.doc.docx_to_pdf import DocxToPdfTool
 from tools.file.web_search import WebSearchTool
 from tools.file.workspace import WorkspaceListTool, WorkspaceReadTool, WorkspaceWriteTool
 from tools.file.xlsx_parser import XlsxParserTool
@@ -49,6 +52,9 @@ TOOL_CLASSES: tuple[type[BaseTool], ...] = (
     WorkspaceListTool,
     WorkspaceReadTool,
     WorkspaceWriteTool,
+    DocxCreateTool,
+    DocxEditTool,
+    DocxToPdfTool,
     XlsxParserTool,
     ReportGenTool,
 )

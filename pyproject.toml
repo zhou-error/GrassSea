@@ -49,6 +49,8 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.43b0",
     "pywebview>=6.2.1",
     "pythonnet>=3.2",
+    "python-docx>=1.2.0",
+    "pywin32>=312",
 ]
 
 [project.optional-dependencies]

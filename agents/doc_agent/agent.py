@@ -32,11 +32,34 @@ class DocAgent(BaseAgent):
         return await self._report_gen(task, context, callbacks)
 
     async def _report_gen(self, task: dict, context: dict, callbacks: AgentCallbacks) -> dict:
-        """报告排版与 PDF 生成 — 未接入渲染器，如实返回未实现"""
-        return {
-            "status": "not_implemented",
-            "message": "报告生成尚未实现：未接入 Markdown→PDF 排版渲染器（report_gen 工具同样未实现），无法写出报告文件，因此不返回任何文件路径。",
-        }
+        """报告排版与 PDF 生成 — 委托给已实现的 report_gen / docx_* 工具
+
+        工具实现位于 tools/report/report_gen.py 与 tools/doc/。
+        这里不重复实现渲染逻辑，避免两处行为不一致。
+        """
+        inputs = task.get("inputs") or {}
+        markdown = inputs.get("markdown") or inputs.get("content")
+        if not markdown:
+            return {
+                "status": "error",
+                "message": "缺少 markdown/content：报告生成需要提供正文内容。",
+            }
+
+        from tools.report.report_gen import ReportGenTool
+
+        tool = ReportGenTool()
+        result = await tool.execute(
+            {
+                "markdown": markdown,
+                "title": inputs.get("title") or "报告",
+                "path": inputs.get("path") or "",
+                "toc": bool(inputs.get("toc", False)),
+                "to_pdf": bool(inputs.get("to_pdf", True)),
+                "overwrite": bool(inputs.get("overwrite", False)),
+            },
+            context,
+        )
+        return result
 
     async def _format_check(self, task: dict, context: dict, callbacks: AgentCallbacks) -> dict:
         """格式规范校验 — 未接入文档解析与格式规则库，如实返回未实现"""

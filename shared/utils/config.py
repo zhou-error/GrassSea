@@ -182,6 +182,14 @@ class Settings(BaseSettings):
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
 
+    # --- Word / PDF 文档生成 ---
+    # PDF 转换引擎: auto(默认，先 Word 后 LibreOffice) | word | libreoffice | none
+    PDF_CONVERTER: str = "auto"
+    # 默认排版模板名（对应 <DATA_DIR>/templates/<name>.yaml）
+    DOC_DEFAULT_TEMPLATE: str = "report"
+    # 未选工作文件夹时，生成文档的落盘目录（留空则 <DATA_DIR>/outputs）
+    DOC_OUTPUT_DIR: str = ""
+
     # --- 桌面模式与工作文件夹 ---
     # 桌面模式开关：由 app.launcher --desktop 置为 true；
     # 开启后才会启用工作文件夹读写与原生对话框等本机能力

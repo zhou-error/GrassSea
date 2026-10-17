@@ -62,6 +62,11 @@ MODEL_EXPOSED_TOOLS: frozenset[str] = frozenset({
     "workspace_list",
     "workspace_read",
     "workspace_write",
+    # Word / PDF 文档
+    "docx_create",
+    "docx_edit",
+    "docx_to_pdf",
+    "report_gen",
 })
 
 
