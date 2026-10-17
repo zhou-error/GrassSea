@@ -311,6 +311,18 @@ export interface DocStatus {
 
 export const docStatusApi = () => api.get<DocStatus>('/doc/status');
 
+// ---- 数据备份与诊断 ----
+
+export interface BackupResult { status: string; path: string; size_mb: number }
+
+export const createBackupApi = () => api.post<BackupResult>('/backup', {}, { timeout: 180000 });
+
+export const listBackupsApi = () =>
+  api.get<{ total: number; backups: { name: string; size_mb: number }[]; dir: string }>('/backups');
+
+/** 诊断包是文件下载，直接用链接打开（浏览器会提示保存） */
+export const diagnosticsUrl = () => '/api/diagnostics';
+
 // ---- 排版模板（可视化编辑）----
 
 export interface DocTemplatePayload {

@@ -380,6 +380,32 @@ async def export_diagnostics():
     )
 
 
+@app.post("/backup")
+async def create_backup_now():
+    """立即创建一份数据备份（等价于 scripts/backup.py）"""
+    try:
+        from scripts.backup import create_backup
+
+        target = await asyncio.to_thread(create_backup)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"备份失败：{exc}") from exc
+    return {"status": "ok", "path": str(target), "size_mb": round(target.stat().st_size / 1048576, 2)}
+
+
+@app.get("/backups")
+async def list_backups_api():
+    """列出已有备份"""
+    from shared.utils.config import get_settings as _gs
+
+    data_dir = (_gs().DATA_DIR or "").strip() or str(_gs().PROJECT_ROOT / "data")
+    folder = Path(data_dir) / "backups"
+    items = []
+    if folder.exists():
+        for f in sorted(folder.glob("grasssea-backup-*.zip"), reverse=True):
+            items.append({"name": f.name, "size_mb": round(f.stat().st_size / 1048576, 2)})
+    return {"total": len(items), "backups": items, "dir": str(folder)}
+
+
 @app.get("/doc/status")
 async def doc_status():
     """Word/PDF 文档能力状态：转换引擎、模板路径、输出目录"""

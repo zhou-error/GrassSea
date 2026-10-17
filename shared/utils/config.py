@@ -220,6 +220,42 @@ class Settings(BaseSettings):
         return Path(__file__).resolve().parent.parent.parent
 
 
+def coerce_setting(settings, key: str, value):
+    """按字段声明的类型转换配置值
+
+    修复的历史问题：/admin/reload 直接 setattr 字符串，
+    pydantic 默认不校验赋值，于是 {"TOOL_CALLING_ENABLED": "false"} 会把
+    布尔字段设成字符串 "false"（真值），开关看起来关了其实没关。
+
+    返回转换后的值；字段不存在或无法转换时返回 None（调用方应忽略该键）。
+    """
+    try:
+        fields = type(settings).model_fields
+    except AttributeError:  # pydantic v1 兜底
+        fields = getattr(type(settings), "__fields__", {})
+    field = fields.get(key)
+    if field is None:
+        return None
+
+    annotation = getattr(field, "annotation", str)
+    text = value if isinstance(value, str) else str(value)
+    lowered = text.strip().lower()
+
+    if annotation is bool or annotation == "bool":
+        return lowered in ("1", "true", "yes", "on", "y")
+    if annotation is int or annotation == "int":
+        try:
+            return int(float(text))
+        except (TypeError, ValueError):
+            return None
+    if annotation is float or annotation == "float":
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
+    return text
+
+
 @lru_cache
 def get_settings() -> Settings:
     """获取全局配置单例

@@ -124,6 +124,12 @@ class DocumentIngestionPipeline:
         elif content_type == "pdf":
             return await self._parse_pdf(content)
 
+        elif content_type in ("xlsx", "xlsm"):
+            return self._parse_xlsx(content)
+
+        elif content_type == "docx":
+            return self._parse_docx(content)
+
         else:
             raise ValueError(f"Unsupported content type: {content_type}")
 
@@ -147,6 +153,65 @@ class DocumentIngestionPipeline:
                 if text:
                     text_parts.append(text)
             return "\n\n".join(text_parts)
+
+    def _parse_xlsx(self, content: bytes) -> str:
+        """解析 Excel：逐工作表转成 CSV 风格文本
+
+        船舶与海洋工程资料里，性能表、型值表大量是 XLSX；
+        不支持它会让知识库对真实资料覆盖率大幅下降。
+        单表限制 2000 行，避免超大表格把上下文撑爆。
+        """
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise ValueError("解析 XLSX 需要 openpyxl，请先安装") from exc
+
+        wb = load_workbook(BytesIO(content), read_only=True, data_only=True)
+        blocks: list[str] = []
+        try:
+            for ws in wb.worksheets:
+                rows: list[str] = []
+                for row in ws.iter_rows(values_only=True):
+                    cells = ["" if c is None else str(c).strip() for c in row]
+                    if any(cells):
+                        rows.append(",".join(cells))
+                    if len(rows) >= 2000:
+                        rows.append("…（该工作表其余行已省略）")
+                        break
+                if rows:
+                    blocks.append(f"[工作表] {ws.title}\n" + "\n".join(rows))
+        finally:
+            wb.close()
+
+        if not blocks:
+            raise ValueError("Excel 中未读到任何非空内容")
+        return "\n\n".join(blocks)
+
+    def _parse_docx(self, content: bytes) -> str:
+        """解析 Word：正文段落 + 表格
+
+        python-docx 读取 .docx（旧的 .doc 二进制格式不支持）。
+        """
+        try:
+            from docx import Document
+        except ImportError as exc:
+            raise ValueError("解析 DOCX 需要 python-docx，请先安装") from exc
+
+        doc = Document(BytesIO(content))
+        parts: list[str] = []
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if text:
+                parts.append(text)
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [c.text.strip() for c in row.cells]
+                if any(cells):
+                    parts.append(",".join(cells))
+
+        if not parts:
+            raise ValueError("Word 文档中未读到任何非空内容")
+        return "\n".join(parts)
 
     def _clean_text(self, text: str) -> str:
         """清洗文本"""

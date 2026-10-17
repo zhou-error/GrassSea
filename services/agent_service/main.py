@@ -23,7 +23,7 @@ from services.agent_service.registry import AgentRegistry
 from services.agent_service.executor import TaskExecutor
 from services.agent_service.tool_loop import ToolCallLoop
 from services.chat_service.attachments import build_context
-from shared.utils.config import get_settings
+from shared.utils.config import coerce_setting, get_settings
 from shared.utils.logging import get_logger, setup_logging, set_trace_id
 from tools.base.registry import ToolRegistry
 from tools.bootstrap import build_tool_registry
@@ -244,14 +244,25 @@ async def reload_config(config: dict[str, str]):
     global intent_classifier, task_planner
 
     updated = False
+    rejected: list[str] = []
     for key, value in config.items():
-        if hasattr(settings, key):
-            old_value = getattr(settings, key, "")
-            setattr(settings, key, value)
-            os.environ[key] = value
-            if old_value != value:
-                updated = True
-            logger.info("Agent config reloaded", key=key, changed=(old_value != value))
+        # 按字段类型转换：否则 {"TOOL_CALLING_ENABLED": "false"} 会被设成
+        # 字符串 "false"（真值），开关看起来关了其实没关。
+        coerced = coerce_setting(settings, key, value)
+        if coerced is None:
+            if not hasattr(settings, key):
+                rejected.append(key)
+            else:
+                rejected.append(f"{key}（值无法转换为 {key} 要求的类型）")
+            continue
+        old_value = getattr(settings, key, "")
+        setattr(settings, key, coerced)
+        os.environ[key] = str(coerced)
+        if old_value != coerced:
+            updated = True
+        logger.info("Agent config reloaded", key=key, changed=(old_value != coerced), value_type=type(coerced).__name__)
+    if rejected:
+        logger.warning("部分配置项被拒绝", keys=rejected)
 
     if updated:
         intent_classifier = IntentClassifier(settings)

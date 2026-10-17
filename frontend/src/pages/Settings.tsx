@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Input, InputNumber, Select, Button, Typography, message, Alert, Collapse, Tag, Spin } from 'antd';
 import { SaveOutlined, ReloadOutlined, FolderOpenOutlined, FileWordOutlined } from '@ant-design/icons';
-import { docOpenFolderApi, docStatusApi, docTemplateApi, saveDocTemplateApi } from '../api';
+import { createBackupApi, docOpenFolderApi, docStatusApi, docTemplateApi, diagnosticsUrl, saveDocTemplateApi } from '../api';
 import type { DocStatus } from '../api';
 import axios from 'axios';
 
@@ -35,6 +35,18 @@ const SettingsPage: React.FC = () => {
   const [tplActive, setTplActive] = useState('');
   const [tplLoading, setTplLoading] = useState(false);
   const [tplSaving, setTplSaving] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+
+  const doBackup = async () => {
+    setBackingUp(true);
+    try {
+      const res = await createBackupApi();
+      message.success(`备份完成：${res.data.path}（${res.data.size_mb} MB）`);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(detail || '备份失败');
+    } finally { setBackingUp(false); }
+  };
 
   useEffect(() => { loadConfigs(); loadDocStatus(); loadTemplate(); }, []);
 
@@ -340,6 +352,45 @@ const SettingsPage: React.FC = () => {
             >
               打开目录 / Open Folder
             </Button>
+          </div>
+        </div>
+
+        {/* 数据与诊断 */}
+        <div style={{
+          marginTop: 24, padding: '16px 20px',
+          background: 'rgba(245,245,245,0.6)', borderRadius: 'var(--radius-md)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <SaveOutlined style={{ color: '#3D5A45' }} />
+            <Text strong style={{ fontSize: 13.5 }}>数据与诊断</Text>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Backup &amp; Diagnostics</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.7 }}>
+            备份包含知识库向量、附件、生成文档、排版模板、加密密钥与 .env；不包含可重新下载的模型缓存。
+            <br />
+            Backup covers vector store, uploads, generated documents, templates, encrypted keys and .env.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              loading={backingUp}
+              onClick={doBackup}
+              icon={<SaveOutlined />}
+              style={{ borderRadius: 'var(--radius-sm)' }}
+            >
+              立即备份数据 / Backup Now
+            </Button>
+            <Button
+              size="small"
+              icon={<FileWordOutlined />}
+              onClick={() => window.open(diagnosticsUrl(), '_blank')}
+              style={{ borderRadius: 'var(--radius-sm)' }}
+            >
+              导出诊断包 / Diagnostics
+            </Button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+            命令行等价操作：<Text code style={{ fontSize: 11 }}>uv run python scripts/backup.py</Text>
           </div>
         </div>
       </div>

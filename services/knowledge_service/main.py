@@ -299,7 +299,8 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="No file provided")
 
     # 检查文件类型
-    allowed_extensions = {".pdf", ".txt", ".md", ".markdown"}
+    # 桌面形态下工程资料大量是 XLSX（性能表/型值表）与 DOCX（设计说明），必须支持
+    allowed_extensions = {".pdf", ".txt", ".md", ".markdown", ".xlsx", ".xlsm", ".docx"}
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in allowed_extensions:
         raise HTTPException(
