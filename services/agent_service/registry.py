@@ -28,6 +28,7 @@ class AgentRegistry:
     async def initialize(self) -> None:
         """初始化，注册内置智能体（元信息 + 可执行实例）"""
         from agents.cad_agent.agent import CAD_AGENT_METADATA, CADAgent
+        from agents.rhino_agent.agent import RHINO_AGENT_METADATA, RhinoAgent
         from agents.doc_agent.agent import DOC_AGENT_METADATA, DocAgent
         from agents.naval_arch_agent.agent import NAVAL_ARCH_METADATA, NavalArchAgent
         from agents.pm_agent.agent import PM_AGENT_METADATA, PMAgent
@@ -39,6 +40,7 @@ class AgentRegistry:
             (REVIEW_AGENT_METADATA, ReviewAgent),
             (NAVAL_ARCH_METADATA, NavalArchAgent),
             (CAD_AGENT_METADATA, CADAgent),
+            (RHINO_AGENT_METADATA, RhinoAgent),
             (RESEARCH_AGENT_METADATA, ResearchAgent),
             (DOC_AGENT_METADATA, DocAgent),
         ):

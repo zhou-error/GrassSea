@@ -121,6 +121,15 @@ CONFIG_SCHEMA.extend([
     # 文档
     {"key": "PDF_CONVERTER", "label": "PDF 转换引擎", "label_en": "PDF Converter",
      "category": "文档", "type": "select", "options": ["auto", "word", "libreoffice", "none"]},
+    # Rhino 桥接
+    {"key": "RHINO_BRIDGE_ENABLED", "label": "启用 Rhino 桥接", "label_en": "Enable Rhino Bridge",
+     "category": "CAD", "type": "boolean"},
+    {"key": "RHINO_BRIDGE_URL", "label": "Rhino 桥接地址", "label_en": "Rhino Bridge URL",
+     "category": "CAD", "type": "text"},
+    {"key": "RHINO_BRIDGE_TIMEOUT_MS", "label": "Rhino 调用超时（毫秒）", "label_en": "Rhino Timeout (ms)",
+     "category": "CAD", "type": "number"},
+    {"key": "RHINO_BRIDGE_TOKEN_FILE", "label": "Rhino 令牌文件路径（留空用 data/bridge.token）",
+     "label_en": "Rhino Token File", "category": "CAD", "type": "text"},
     {"key": "DOC_DEFAULT_TEMPLATE", "label": "默认排版模板名",
      "label_en": "Default Document Template", "category": "文档", "type": "text"},
     {"key": "DOC_OUTPUT_DIR", "label": "文档输出目录（留空用 data/outputs）",

@@ -182,6 +182,16 @@ class Settings(BaseSettings):
     BRAVE_SEARCH_API_KEY: str = ""
     BING_SEARCH_API_KEY: str = ""
 
+    # --- Rhino 建模桥接 ---
+    # 总开关：关闭时 rhino_bridge 工具明确返回未启用
+    RHINO_BRIDGE_ENABLED: bool = False
+    # Rhino 侧桥接脚本监听地址（只应指向本机）
+    RHINO_BRIDGE_URL: str = "http://127.0.0.1:8765"
+    # 单次调用超时（毫秒）
+    RHINO_BRIDGE_TIMEOUT_MS: int = 30000
+    # 令牌文件路径（留空则用 <DATA_DIR>/bridge.token）
+    RHINO_BRIDGE_TOKEN_FILE: str = ""
+
     # --- Word / PDF 文档生成 ---
     # PDF 转换引擎: auto(默认，先 Word 后 LibreOffice) | word | libreoffice | none
     PDF_CONVERTER: str = "auto"

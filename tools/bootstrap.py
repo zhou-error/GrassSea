@@ -25,6 +25,7 @@ from tools.computation.hull_transform import HullTransformTool
 from tools.file.ocr_engine import OcrEngineTool
 from tools.file.pdf_parser import PdfParserTool
 from tools.file.todo_manager import TodoManagerTool
+from tools.cad.rhino_bridge import RhinoBridgeTool
 from tools.doc.docx_create import DocxCreateTool
 from tools.doc.docx_edit import DocxEditTool
 from tools.doc.docx_to_pdf import DocxToPdfTool
@@ -55,6 +56,7 @@ TOOL_CLASSES: tuple[type[BaseTool], ...] = (
     DocxCreateTool,
     DocxEditTool,
     DocxToPdfTool,
+    RhinoBridgeTool,
     XlsxParserTool,
     ReportGenTool,
 )
