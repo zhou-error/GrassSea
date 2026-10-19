@@ -110,6 +110,25 @@ data/
 
 > 详细用法见 [WORD_DOC_GUIDE](./WORD_DOC_GUIDE.md)。
 
+### 4.3.5 Rhino 三维建模
+
+桌面形态可以驱动**本机已打开的 Rhino 8** 建模（船体为主）：
+
+1. Rhino 8 → 命令 `ScriptEditor` → 新建 **Python 3** → 粘贴 `rhino/bridge.py` → Run
+2. 脚本会打印令牌与 `http://127.0.0.1:8765`；**只运行一次**，重启 Rhino 后再运行
+3. 设置页 →「CAD」→ 打开「启用 Rhino 桥接」
+4. 「Rhino 令牌文件路径」填脚本打印的路径（如 `C:\Users\<你>\GrassSea\bridge.token`），
+   或直接填 32 位令牌本身（两种都支持）
+
+**12 个操作**：`create_curve` · `extrude` · `boolean` · `delete` · `query` ·
+`loft_sections` · `loft` · `mirror` · `split` · `join` · `offset_srf` · `mass_properties`
+
+**安全约束**：
+- `boolean` / `delete` 需要 `confirm=true`；`split`/`join` 在 `keep_input=false` 时同样需要
+- 失败只回滚**本次**创建的对象，不影响之前的几何
+- Rhino 未开时返回 `bridge_unreachable`，不会伪造结果
+
+> 完整说明见 [rhino/README.md](../rhino/README.md)。
 ### 4.4 配置全暴露
 
 设置页列出 **26 项可编辑配置**（LLM / 模型 / RAG / 会话 / 搜索 / 工具调用 / 文档），每项同时显示**中文名与英文名**；

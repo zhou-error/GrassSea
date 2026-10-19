@@ -368,7 +368,7 @@ curl http://localhost:8001/tools
 | `TOOL_CALL_TIMEOUT_SECONDS` | 120 | 整个循环的总超时 |
 | `TOOL_CALL_MODEL` | deepseek-chat | 工具调用使用的模型 |
 
-> 注意：`TOOL_CALL_EXPOSE_UNIMPLEMENTED=true` 会让 9 个尚未实现的工具也进入模型视野，
+> 注意：`TOOL_CALL_EXPOSE_UNIMPLEMENTED=true` 会让 8 个尚未实现的工具也进入模型视野，
 > 通常只会浪费轮次，除非你正在做能力验证。
 
 ---
@@ -484,11 +484,16 @@ curl -X POST http://localhost:8001/chat -H "Content-Type: application/json" -d "
 | `resistance` | computation | 已实现 | 是 |
 | `hull_transform` | computation | 已实现 | 是 |
 | `reg_check` | compliance | 已实现（内置启发式阈值，非规范条文） | 是 |
+| `workspace_list` / `workspace_read` / `workspace_write` | file | 已实现 | 是（**仅桌面模式**且用户已选目录） |
+| `docx_create` / `docx_edit` / `docx_to_pdf` | report | 已实现（Word 全排版 / 修改 / 转 PDF） | 是 |
+| `report_gen` | report | 已实现（Markdown → docx → PDF） | 是 |
+| `rhino_bridge` | cad | 已实现（驱动 Rhino 8，12 个操作） | 是 |
 | `pdf_parser` / `xlsx_parser` / `ocr_engine` | file | 未实现 | 否 |
 | `todo_manager` / `web_search` | file | 未实现 | 否 |
 | `cad_draw` / `cad_parse` / `dwg_converter` | cad | 未实现 | 否 |
-| `report_gen` | report | 未实现 | 否 |
-| `workspace_list` / `workspace_read` / `workspace_write` | file | 已实现 | 是（**仅桌面模式**且用户已选目录） |
+
+> 合计 **21 个工具**，其中 **13 个对模型可见**；8 个未实现的工具不下发，
+> 避免模型把轮次浪费在必然返回 `not_implemented` 的调用上。
 
 > 共 **17 个工具**：5 个已实现的计算/核查工具 + 3 个工作文件夹工具 + 9 个诚实占位工具。
 > 工作文件夹工具的实现见 `tools/file/workspace.py`，是「带访问控制与大小上限」的完整范例，

@@ -11,13 +11,13 @@
 | 模块 | 状态 |
 |---|---|
 | 4 个 FastAPI 微服务（对话 / 编排 / 知识库 / 模型网关） | ✅ 可用 |
-| 6 个业务 Agent（项目经理 · 审查 · 船舶工程师 · CAD · 研究 · 文档） | ✅ 全部注册 |
-| **20 个工具**，其中 **12 个对模型可见**（5 计算 + 3 工作文件夹 + 4 文档） | ✅ 注册并实测 |
+| **7 个业务 Agent**（项目经理 · 审查 · 船舶工程师 · CAD · **Rhino 建模** · 研究 · 文档） | ✅ 全部注册 |
+| **21 个工具**，其中 **13 个对模型可见**（5 计算 + 3 工作文件夹 + 4 文档 + **1 Rhino 桥接**） | ✅ 注册并实测 |
 | **模型自主调用工具**（function calling） | ✅ 模型自选工具，失败自动回落规则规划 |
 | **RAG 知识库**（混合检索 + 重排 + 带引用生成） | ✅ 端到端实测；向量后端可切换 |
 | **入库格式**：PDF / TXT / MD / **XLSX** / **DOCX** | ✅ 实测（扫描版 PDF 暂不支持 OCR） |
 | **Word 文档**（新建 / 修改 / 全排版 / 转 PDF） | ✅ 实测，含排版模板 |
-| **配置可视化编辑**（26 项，中英双语） | ✅ 设置页可改，类型安全 |
+| **配置可视化编辑**（30 项 / 8 分类，中英双语） | ✅ 设置页可改，类型安全 |
 | **启动自检**（密钥可解密 / 目录可写 / 端口可用） | ✅ 失败即中止并给出恢复指引（`--force` 可跳过） |
 | **日志落盘** | ✅ `data/logs/app.log`（10MB × 5 滚动） |
 | **一键备份 / 恢复** | ✅ `data/` + 密钥 + `.env`；恢复前自动备份当前状态 |
@@ -25,7 +25,7 @@
 | **启动一致性校验** | ✅ planner 引用的 agent/tool 必须存在，不一致即告警 |
 | 前端 4 页面（项目 / 知识库 / 智能体 / 设置） | ✅ 可用 |
 | 登录 / RBAC / 多租户 | ❌ 未实现（个人使用定位，暂不需要） |
-| **OCR（扫描版 PDF）**、CAD、部分专业能力 | ❌ 诚实返回「未实现」，不产出伪造结果（见 [BACKLOG](docs/BACKLOG.md)） |
+| **DWG/DXF 解析**、OCR、Grasshopper | ❌ 诚实返回「未实现」，不产出伪造结果（见 [BACKLOG](docs/BACKLOG.md)） |
 
 > **诚实失败是本项目的硬约定**：能力未实现时返回明确原因，绝不编造文件路径、规范条款号或文献条目。
 
@@ -88,6 +88,22 @@ uv run python scripts/init_db.py && uv run python scripts/seed_data.py
 
 ---
 
+### Rhino 三维建模（船体为主）
+
+通过本地桥接驱动**已打开**的 Rhino 8，共 12 个操作：
+
+| 类别 | 操作 |
+|---|---|
+| 通用 | `create_curve` · `extrude` · `boolean` · `delete` · `query` |
+| 船体 | `loft_sections`（断面点表直连放样）· `loft` · `mirror` · `split` · `join` · `offset_srf` · `mass_properties` |
+
+- **线程安全**：所有文档操作经 `InvokeOnUiThread` 回到 Rhino 主线程，跨线程操作会硬崩
+- **安全**：令牌鉴权 + 仅监听 127.0.0.1 + 操作白名单 + `boolean/delete` 需 `confirm=true`
+- **可回滚**：每次请求一个 undo 记录；失败只删除**本次**创建的对象，绝不动之前的几何
+- **诚实**：Rhino 未开或脚本未运行时返回 `bridge_unreachable`，不伪造 object_id
+
+详见 [rhino/README.md](rhino/README.md) 与 [开发规划](docs/RHINO_BRIDGE_PLAN.md)。
+
 ## 架构与端口
 
 ```
@@ -116,7 +132,7 @@ knowledge_service :8003   model_gateway :8004
 agents/            6 个业务智能体
 app/               桌面形态入口（launcher 单进程启动器 / desktop 窗口）
 services/          4 个 FastAPI 服务
-tools/             20 个工具（computation / doc / file / cad / compliance / report）
+tools/             21 个工具（computation / doc / file / cad / compliance / report）
 shared/            共享内核（utils / protocols / models / vectorstore / middleware）
 templates/         排版模板（可编辑）
 frontend/          React 18 SPA
@@ -133,7 +149,7 @@ docs/              项目文档
 |---|---|
 | `.env` | 端口、中间件地址、开关 |
 | 加密密钥库 | `DEEPSEEK_API_KEY` 等敏感项，Fernet 加密存于 `docker-data/secrets/` |
-| **设置页** | 26 项可编辑配置，中英双语标签，改完即时生效 |
+| **设置页** | 30 项可编辑配置（8 分类），中英双语标签，改完即时生效 |
 
 常用开关：`VECTOR_BACKEND`、`TOOL_CALLING_ENABLED`、`PDF_CONVERTER`、`DESKTOP_MODE`。
 完整清单见 `.env.example` 与设置页。
@@ -151,6 +167,8 @@ docs/              项目文档
 | [docs/WORD_DOC_GUIDE.md](docs/WORD_DOC_GUIDE.md) | Word 文档能力与模板 |
 | [docs/DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) | 服务器形态部署 |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | **待办清单**：已明确但暂缓的事项及理由 |
+| [docs/RHINO_BRIDGE_PLAN.md](docs/RHINO_BRIDGE_PLAN.md) | Rhino 桥接的开发规划与协议设计 |
+| [rhino/README.md](rhino/README.md) | Rhino 桥接安装、操作速查、故障排查、验收清单 |
 | [docs/AUDIT-2026-10-17.md](docs/AUDIT-2026-10-17.md) | **鲁棒性审计报告**：S0-S3 缺陷、检查矩阵、未覆盖项 |
 | [教学文件/](教学文件/) | 13 阶段从零构建教程 |
 

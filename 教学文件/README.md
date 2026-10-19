@@ -20,6 +20,7 @@
 > | 仅 Docker 部署 | 新增**桌面形态**：`uv run python -m app.launcher --desktop`，不需要 Docker 与任何中间件 |
 > | 工具由规则派发 | 已支持**模型自主调用工具**（function calling），见 `docs/TOOL_DEVELOPMENT_GUIDE.md` |
 > | 无 Word/PDF 能力 | 已实现 Word 新建/修改/排版/转 PDF，见 `docs/WORD_DOC_GUIDE.md` |
+> | 无三维建模能力 | 已实现 Rhino 8 桥接（12 个操作，船体放样为主），见 `rhino/README.md` |
 >
 > 权威说明请看：`README.md`、`docs/ARCHITECTURE.md`、`docs/DESKTOP_GUIDE.md`。
 

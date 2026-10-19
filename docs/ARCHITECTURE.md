@@ -159,7 +159,7 @@ GrassSea/
 │   └── model_gateway/          #   模型网关：main / router / token_tracker
 ├── tools/                      # 工具库（14 个 + 注册中心 + 引导模块）
 │   ├── base/registry.py        #   工具注册中心（状态机、超时、健康检查）
-│   ├── bootstrap.py            #   build_tool_registry()：实例化并注册全部 20 个工具
+│   ├── bootstrap.py            #   build_tool_registry()：实例化并注册全部 21 个工具
 │   ├── doc/                    #   Word 文档：docx_create / docx_edit / docx_to_pdf
 │   ├── computation/            #   4 个真实计算工具：hydrostatics/stability/resistance/hull_transform
 │   ├── cad/ · file/ · compliance/ · report/   #   10 个诚实占位工具（返回 not_implemented）
@@ -241,7 +241,7 @@ GrassSea/
 | M5 | 知识库服务 | `services/knowledge_service/` | 文档入库、混合检索、重排、答案生成（向量后端可插拔） | 6 / 1,385 |
 | M6 | 业务智能体 | `agents/` | 6 个专业 Agent，按能力粒度实现 | 13 / 573 |
 | **M11** | **桌面形态** | `app/` | 单进程启动器 + 桌面窗口（分级策略）+ pythonnet 运行时配置 | 4 / ~420 |
-| M7 | 工具库 | `tools/` | **20 个工具**（含 3 个工作文件夹工具）+ 注册中心 + 引导 | 22 / 797 |
+| M7 | 工具库 | `tools/` | **21 个工具**（含 3 个工作文件夹 + 1 个 Rhino 桥接）+ 注册中心 + 引导 | 22 / 797 |
 | M8 | 前端 | `frontend/src/` | SPA：4 页面 + 6 组件 + 2 store + API 封装 | 15 / 2,664 |
 | M9 | 脚本 | `scripts/` | 初始化与维护脚本（非运行时） | 5 / 422 |
 | M10 | 测试 | `tests/` | 单元测试 | 5 / 377 |
@@ -316,7 +316,7 @@ graph LR
 | `shared/protocols/agent.py` | 标准库 | `agents/*`、`agent_service/registry.py`、`executor.py` |
 | `shared/protocols/tool.py` | 标准库 | `tools/*`、`tools/base/registry.py` |
 | `tools/base/registry.py` | `shared.protocols.tool`、`shared.utils.logging` | `tools/bootstrap.py`、`agent_service/executor.py` |
-| `tools/bootstrap.py` | **全部 20 个工具类** | `agent_service/main.py`（lifespan） |
+| `tools/bootstrap.py` | **全部 21 个工具类** | `agent_service/main.py`（lifespan） |
 | `services/agent_service/executor.py` | `agent_service/registry`、`shared.models.postgres.task`、`shared.protocols.agent`、`tools.base.registry` | `agent_service/main.py` |
 | `services/agent_service/planner.py` | `agent_service/intent`、`shared.utils.config` | `agent_service/main.py` |
 | `services/agent_service/tool_loop.py` | `shared.protocols.tool`、`shared.utils.config`、`model_gateway`（HTTP） | `agent_service/main.py`（lifespan + /chat） |
@@ -662,7 +662,7 @@ sequenceDiagram
 | 2 | 构造 `IntentClassifier` / `TaskPlanner` / `AgentRegistry` / `TaskExecutor` | `agent_service/main.py:46-50` |
 | 3 | `await agent_registry.initialize()` 注册并实例化 6 个 Agent | `agent_service/registry.py:28` |
 | 4 | `await intent_classifier.initialize()` | `intent.py:96` |
-| 5 | `tool_registry = await build_tool_registry()` 注册 20 个工具 | `tools/bootstrap.py:53`，调用点约 `agent_service/main.py:56` |
+| 5 | `tool_registry = await build_tool_registry()` 注册 21 个工具 | `tools/bootstrap.py:53`，调用点约 `agent_service/main.py:56` |
 | 6 | 记录启动日志（含 registered_tools 计数） | `agent_service/main.py` 日志 |
 
 ### 运行阶段
