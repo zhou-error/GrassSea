@@ -56,16 +56,44 @@ _busy = threading.Event()
 
 
 def _register_token():
-    """生成并写出一次性令牌（同时打印到输出窗口）"""
+    """获取令牌：**已存在就复用**，只有首次才生成
+
+    此前每次运行都重新生成并覆盖文件，导致「重启桥接」会把 GrassSea
+    手里正在用的令牌作废，表现为莫名其妙的 unauthorized（已实测踩到）。
+    如需换令牌，请先删除令牌文件再运行，或在 Rhino 里显式调用 rotate_token()。
+    """
+    try:
+        if TOKEN_FILE.exists():
+            existing = TOKEN_FILE.read_text(encoding="utf-8").strip()
+            if existing:
+                print("[GrassSea] 复用已有令牌:", TOKEN_FILE)
+                print("[GrassSea] 令牌（如需手动填写）:", existing)
+                return existing
+    except Exception as exc:  # noqa: BLE001
+        print("[GrassSea] 读取已有令牌失败，将重新生成:", exc)
+
     token = uuid.uuid4().hex
     try:
         TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
         TOKEN_FILE.write_text(token, encoding="utf-8")
-        print("[GrassSea] 令牌已写入:", TOKEN_FILE)
+        print("[GrassSea] 新令牌已写入:", TOKEN_FILE)
     except Exception as exc:  # noqa: BLE001
         print("[GrassSea] 令牌写入失败:", exc)
     print("[GrassSea] 令牌（如需手动填写）:", token)
     return token
+
+
+def rotate_token():
+    """显式轮换令牌（令牌泄露或需要重置时用）
+
+    在 RhinoCode 控制台执行：  rotate_token()
+    然后重启 GrassSea 侧（它会重新读取令牌文件）。
+    """
+    try:
+        TOKEN_FILE.write_text(uuid.uuid4().hex, encoding="utf-8")
+        print("[GrassSea] 令牌已轮换，请重启桥接与 GrassSea")
+    except Exception as exc:  # noqa: BLE001
+        print("[GrassSea] 轮换失败:", exc)
 
 
 TOKEN = ""
@@ -378,10 +406,29 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(202, {"request_id": rid, "state": "queued"})
 
 
+class _Server(ThreadingHTTPServer):
+    """关闭端口复用
+
+    ThreadingHTTPServer 默认 allow_reuse_address=True，而在 Windows 上
+    SO_REUSEADDR 允许**绑定到已被监听的端口**——重复运行脚本会"看起来启动成功"，
+    实际却是幽灵监听（实测踩到：后两次启动的令牌全部 401）。这里强制关闭。
+    """
+
+    allow_reuse_address = False
+    daemon_threads = True
+
+
 def start():
     global TOKEN
     TOKEN = _register_token()
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    try:
+        server = _Server(("127.0.0.1", PORT), Handler)
+    except OSError as exc:
+        print(f"[GrassSea] 无法监听 127.0.0.1:{PORT} —— {exc}")
+        print("[GrassSea] 通常表示已有一个桥接在运行。")
+        print("[GrassSea] 同一个 Rhino 里重复运行本脚本是无效的；")
+        print("[GrassSea] 请重启 Rhino（或关闭 ScriptEditor 会话）后只运行一次。")
+        return None
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     print(f"[GrassSea] Rhino 桥接已启动: http://127.0.0.1:{PORT}")

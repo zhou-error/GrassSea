@@ -22,6 +22,13 @@
 
 脚本停止 = 桥接停止。Rhino 关闭也会断开。
 
+> ⚠️ **只运行一次**。同一个 Rhino 里重复运行本脚本不会「重启」桥接，
+> 只会产生幽灵监听（后启动的拿不到连接，令牌还会被覆盖）。
+> 需要重启桥接时：**先重启 Rhino**，再运行一次脚本。
+>
+> 令牌**首次生成后会复用**，重启不会作废 GrassSea 手里的令牌。
+> 需要轮换时先删除令牌文件，或在 RhinoCode 控制台执行 `rotate_token()`。
+
 ---
 
 ## 2. 数据目录
@@ -34,6 +41,18 @@ set GRASSEA_DATA_DIR=F:\GrassSea\data
 ```
 
 GrassSea 侧默认读 `<DATA_DIR>/bridge.token`，两边必须指向同一个文件。
+
+两种对齐方式，任选其一：
+
+**A. 改 Rhino 侧的写入位置**（推荐，两侧都用标准路径）
+启动 Rhino 前设置环境变量，再运行脚本：
+```
+set GRASSEA_DATA_DIR=F:\GrassSea\data
+```
+
+**B. 改 GrassSea 侧的读取位置**（不改环境变量）
+设置页 →「CAD」→ `RHINO_BRIDGE_TOKEN_FILE` 填脚本打印的路径，
+例如 `C:\Users\<你>\GrassSea\bridge.token`。改完即时生效。
 
 ---
 
