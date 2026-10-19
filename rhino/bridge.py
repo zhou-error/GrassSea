@@ -25,7 +25,7 @@ from pathlib import Path
 
 import Rhino
 import scriptcontext as sc
-from System import Action
+from System import Action, Guid
 
 # ---------------------------------------------------------------- 配置
 
@@ -107,7 +107,11 @@ def _units() -> str:
 
 
 def _guid(text):
-    return Rhino.Geometry.Guid(text) if not isinstance(text, uuid.UUID) else text
+    """字符串 -> System.Guid（Rhino 的对象 id 类型）
+
+    注意：不存在 Rhino.Geometry.Guid，必须用 System.Guid（真机踩到，报 AttributeError）。
+    """
+    return Guid(str(text))
 
 
 def _uuid_from_obj_id(obj_id):
@@ -125,7 +129,7 @@ def _error(code, message, detail=None):
 # 每个函数返回 (object_ids, preview_info)；异常抛出 (code, message)
 
 
-def op_create_curve(params):
+def op_create_curve(params, dry_run=False):
     points = [Rhino.Geometry.Point3d(p[0], p[1], p[2]) for p in params["points"]]
     degree = int(params.get("degree", min(3, len(points) - 1)))
     closed = bool(params.get("closed", False))
@@ -139,11 +143,13 @@ def op_create_curve(params):
     if not curve.IsValid:
         raise ValueError("曲线无效（自交或点序异常）")
 
+    if dry_run:
+        return [], {"type": "Curve", "length": curve.GetLength(), "dry_run": True}
     obj_id = sc.doc.Objects.AddCurve(curve)
     return [str(_uuid_from_obj_id(obj_id))], {"type": "Curve", "length": curve.GetLength()}
 
 
-def op_extrude(params):
+def op_extrude(params, dry_run=False):
     guid = _guid(params["curve_id"])
     obj = sc.doc.Objects.FindId(guid)
     if obj is None:
@@ -159,13 +165,17 @@ def op_extrude(params):
     if extrusion is None:
         raise ValueError("挤出失败：高度或曲线不合法")
 
-    obj_id = sc.doc.Objects.AddExtrusion(extrusion)
     brep = extrusion.ToBrep(False)
-    return [str(_uuid_from_obj_id(obj_id))], {
+    preview = {
         "type": "Extrusion",
         "cap": cap,
         "volume": brep.GetVolume() if brep else None,
     }
+    if dry_run:
+        preview["dry_run"] = True
+        return [], preview
+    obj_id = sc.doc.Objects.AddExtrusion(extrusion)
+    return [str(_uuid_from_obj_id(obj_id))], preview
 
 
 def _brep_of(obj_id_text):
@@ -178,7 +188,7 @@ def _brep_of(obj_id_text):
     return brep
 
 
-def op_boolean(params):
+def op_boolean(params, dry_run=False):
     a = _brep_of(params["brep_id_a"])
     b = _brep_of(params["brep_id_b"])
     tol = float(params["tolerance"])
@@ -194,13 +204,15 @@ def op_boolean(params):
     if not result or len(result) == 0:
         raise ValueError("布尔运算未产生结果：对象可能不相交、非闭合或容差不当")
 
+    if dry_run:
+        return [], {"type": "Brep", "count": len(result), "dry_run": True}
     ids = []
     for brep in result:
         ids.append(str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(brep))))
     return ids, {"type": "Brep", "count": len(ids)}
 
 
-def op_delete(params):
+def op_delete(params, dry_run=False):   # 删除无预览语义，忽略 dry_run
     deleted, missing = [], []
     for text in params["object_ids"]:
         guid = _guid(text)
@@ -214,7 +226,7 @@ def op_delete(params):
     return deleted, {"deleted": len(deleted), "missing": missing}
 
 
-def op_query(params):
+def op_query(params, dry_run=False):
     summary = []
     missing = []
     for text in params["object_ids"]:
@@ -259,6 +271,9 @@ def _execute(request):
     params = request["params"]
     bake = bool(request.get("bake", True))
 
+    # bake=false 时**不写入文档**（此前只影响 undo 分组，几何照样被 Add 进文档，属实现缺陷）
+    dry_run = (not bake) and operation != "delete"
+
     handler = _HANDLERS.get(operation)
     if handler is None:
         return {"request_id": rid, "state": "failed",
@@ -266,12 +281,14 @@ def _execute(request):
 
     undo = None
     try:
-        if bake and operation != "query":
+        writing = bake and not dry_run and operation != "query"
+        if writing:
             sc.doc.BeginUndoRecord(f"GrassSea: {operation}")
             undo = True
-        object_ids, preview = handler(params)
+        object_ids, preview = handler(params, dry_run)
         if undo:
             sc.doc.EndUndoRecord()
+        if writing:
             sc.doc.Views.Redraw()
         return {
             "request_id": rid, "state": "done", "ok": True,
@@ -299,8 +316,9 @@ def _execute(request):
                 sc.doc.Undo()
             except Exception:  # noqa: BLE001
                 pass
+        # 未知异常属于桥接自身问题，不要伪装成几何失败
         return {"request_id": rid, "state": "failed",
-                "error": _error("geometry_failure", f"{type(exc).__name__}: {exc}")}
+                "error": _error("internal", f"{type(exc).__name__}: {exc}")}
 
 
 def _drain_queue():
