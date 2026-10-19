@@ -71,6 +71,43 @@ query
   用途：查询几何摘要。
   params: { object_ids: [guid, ...] }
   返回：每个对象的 type、bounding_box、brep_face_count。
+
+--- 船体建模专用 ---
+
+loft
+  用途：把多条断面曲线放样成船体曲面（这是船体建模的主操作）。
+  params: { curve_ids: [guid, ...]（至少 2 条）, closed?: bool, solid?: bool }
+  说明：断面曲线应顺序一致、方向一致；solid=true 会尝试封口，
+        但船体首尾开敞时封口可能失败，此时只得到曲面。
+
+mirror
+  用途：按世界平面镜像（船体默认 yz，即镜像到另一舷）。
+  params: { object_ids: [guid,...], plane?: "yz"|"xz"|"xy", copy?: bool }
+  说明：只建一半船体时用它补齐；plane 缺省 yz。
+
+split
+  用途：按世界平面切分（甲板位置、艉封板、设计水线）。
+  params: { object_ids: [guid,...], plane?: "yz"|"xz"|"xy", keep_input?: bool }
+  说明：keep_input=false 会删除原对象，只保留切出的片体；调用前必须告知用户。
+
+offset_srf
+  用途：偏移曲面生成壳体（板厚）。
+  params: { object_id: guid, distance: float, solid?: bool }
+  说明：distance 正负决定偏移方向；取负值得到板厚向内的壳。
+
+mass_properties
+  用途：读面积、体积、质心——用于核对排水量是否与静水力计算一致。
+  params: { object_ids: [guid, ...] }
+  说明：只读。体积只在对象是闭合实体时才有意义。
+
+--- 船体建模推荐顺序 ---
+
+1. 用 create_curve 按型值表逐条建横剖面（或水线、纵剖线）
+2. loft 放样成船体曲面（断面方向必须一致）
+3. mirror 镜像到另一舷（若只建了半船）
+4. split 切出甲板线 / 艉封板
+5. offset_srf 生成板厚壳体（如需结构）
+6. mass_properties 核对体积 → 与 hydrostatics 的排水量对照
 """
 
 THREAD_SAFETY = """任何涉及 RhinoDoc 读写的操作都必须在 Rhino 主 UI 线程执行，
@@ -108,6 +145,11 @@ GEOMETRY_VALIDATION = """提交前你要做最小校验；校验不通过就不�
 - delete：object_ids 非空；删除前先用 query 确认这些对象是什么。
 
 单位一律以桥接返回的 unit 为准，不要假设是米。
+
+船体建模额外注意：
+- loft 的 curve_ids 至少 2 条，且各断面曲线方向必须一致，否则放样会扭曲或失败；
+- split 在 keep_input=false 时会删除原对象，属破坏性操作，需确认并说明（keep_input=true 则非破坏）；
+- mass_properties 只读，但体积只有闭合实体才有效，未闭合请如实说明。
 """
 
 SECTIONS: list[tuple[int, str, str]] = [

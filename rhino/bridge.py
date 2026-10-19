@@ -40,7 +40,14 @@ else:
     # 请改成你的 GrassSea data 目录，例如 r"F:\GrassSea\data"
     TOKEN_FILE = Path.home() / "GrassSea" / "bridge.token"
 
-ALLOWED_OPERATIONS = {"create_curve", "extrude", "boolean", "delete", "query"}
+ALLOWED_OPERATIONS = {
+    "create_curve", "extrude", "boolean", "delete", "query",
+    # 船体建模
+    "loft", "mirror", "split", "offset_srf", "mass_properties",
+}
+
+#: 世界平面名 -> 法向（与 GrassSea 侧 rhino_schema.PLANE_NORMALS 保持一致）
+PLANE_NORMALS = {"yz": (1.0, 0.0, 0.0), "xz": (0.0, 1.0, 0.0), "xy": (0.0, 0.0, 1.0)}
 QUEUE_LIMIT = 32
 MAX_IDEMPOTENT_ENTRIES = 100
 PROTOCOL_VERSION = 1
@@ -265,12 +272,176 @@ def op_query(params, dry_run=False):
     return [], {"objects": summary, "missing": missing}
 
 
+# ---------- 船体建模 ----------
+# 注：以下部分 API 的重载在不同 Rhino 版本间有差异，已加多路兜底；
+#     若全部失败会抛出提示"Rhino API 不可用"的 RuntimeError（归 internal）。
+
+
+def _curve_of(obj_id_text):
+    obj = sc.doc.Objects.FindId(_guid(obj_id_text))
+    if obj is None:
+        raise LookupError(f"找不到对象：{obj_id_text}")
+    curve = obj.CurveGeometry
+    if curve is None:
+        raise ValueError(f"对象不是曲线：{obj_id_text}")
+    return curve
+
+
+def op_loft(params, dry_run=False):
+    """把多条断面曲线放样成船体曲面/实体"""
+    curves = [_curve_of(cid) for cid in params["curve_ids"]]
+    closed = bool(params.get("closed", False))
+    solid = bool(params.get("solid", False))
+    tol = sc.doc.ModelAbsoluteTolerance
+
+    breps = Rhino.Geometry.Brep.CreateFromLoft(
+        curves,
+        Rhino.Geometry.Point3d.Unset,
+        Rhino.Geometry.Point3d.Unset,
+        Rhino.Geometry.LoftType.Normal,
+        closed,
+    )
+    if not breps or len(breps) == 0:
+        raise ValueError("放样失败：断面曲线可能不连续、方向不一致或存在重复")
+
+    brep = breps[0]
+    if solid:
+        capped = brep.CapPlanarHoles(tol)
+        if capped is not None:
+            brep = capped
+
+    preview = {
+        "type": "Brep(Loft)",
+        "area": brep.GetArea(),
+        "is_solid": brep.IsSolid,
+        "curves": len(curves),
+    }
+    if dry_run:
+        preview["dry_run"] = True
+        return [], preview
+    obj_id = sc.doc.Objects.AddBrep(brep)
+    return [str(_uuid_from_obj_id(obj_id))], preview
+
+
+def op_mirror(params, dry_run=False):
+    """按世界平面镜像（船体默认 yz：镜像到另一舷）"""
+    normal = PLANE_NORMALS[params.get("plane", "yz")]
+    copy = bool(params.get("copy", True))
+    plane = Rhino.Geometry.Plane(
+        Rhino.Geometry.Point3d(0, 0, 0),
+        Rhino.Geometry.Vector3d(normal[0], normal[1], normal[2]),
+    )
+    xform = Rhino.Geometry.Transform.Mirror(plane)
+    if xform is None:
+        raise RuntimeError("Rhino API 不可用：Transform.Mirror 返回空")
+
+    ids = []
+    if dry_run:
+        return [], {"type": "Mirror", "count": len(params["object_ids"]), "copy": copy, "dry_run": True}
+    for text in params["object_ids"]:
+        caused = Rhino.RhinoDoc.Transform(sc.doc.Objects.FindId(_guid(text)), xform, copy)
+        if caused is None:
+            raise ValueError(f"镜像失败：{text}")
+        new_id = caused if copy else _guid(text)
+        ids.append(str(_uuid_from_obj_id(new_id)))
+    return ids, {"type": "Mirror", "count": len(ids), "copy": copy}
+
+
+def op_split(params, dry_run=False):
+    """按世界平面切分（甲板 / 艉封板 / 水线）"""
+    normal = PLANE_NORMALS[params.get("plane", "yz")]
+    keep_input = bool(params.get("keep_input", False))
+    plane = Rhino.Geometry.Plane(
+        Rhino.Geometry.Point3d(0, 0, 0),
+        Rhino.Geometry.Vector3d(normal[0], normal[1], normal[2]),
+    )
+    tol = sc.doc.ModelAbsoluteTolerance
+
+    total = 0
+    for text in params["object_ids"]:
+        brep = _brep_of(text)
+        try:
+            pieces = brep.Split(plane, tol)
+        except Exception:  # noqa: BLE001
+            pieces = Rhino.Geometry.Brep.Split(brep, plane, tol)
+        if not pieces or len(pieces) == 0:
+            raise ValueError(f"切割失败：{text} 与该平面没有交点")
+        total += len(pieces)
+        if dry_run:
+            continue
+        if not keep_input:
+            sc.doc.Objects.Delete(_guid(text), True)
+        for piece in pieces:
+            sc.doc.Objects.AddBrep(piece)
+    return [], {"type": "Split", "pieces": total, "keep_input": keep_input}
+
+
+def op_offset_srf(params, dry_run=False):
+    """偏移曲面生成壳体（板厚）"""
+    brep = _brep_of(params["object_id"])
+    distance = float(params["distance"])
+    solid = bool(params.get("solid", True))
+    tol = sc.doc.ModelAbsoluteTolerance
+
+    results = None
+    try:
+        results = Rhino.Geometry.Brep.Offset([brep], distance, solid, False, tol)
+    except Exception:  # noqa: BLE001
+        try:
+            results = brep.Offset(distance, tol)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Rhino API 不可用：Brep.Offset 全部重载失败（{exc}）") from exc
+
+    if not results or len(results) == 0:
+        raise ValueError("偏移失败：曲面曲率过大或距离不当")
+
+    preview = {"type": "Shell", "count": len(results), "distance": distance}
+    if dry_run:
+        preview["dry_run"] = True
+        return [], preview
+    ids = [str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(b))) for b in results]
+    return ids, preview
+
+
+def op_mass_properties(params, dry_run=False):
+    """面积 / 体积 / 质心（只读，用于核对排水量）"""
+    items = []
+    missing = []
+    for text in params["object_ids"]:
+        obj = sc.doc.Objects.FindId(_guid(text))
+        if obj is None:
+            missing.append(text)
+            continue
+        geom = obj.Geometry
+        entry = {"object_id": text, "type": type(geom).__name__}
+        brep = Rhino.Geometry.Brep.TryConvertBrep(geom)
+        if brep is not None:
+            entry["area"] = brep.GetArea()
+            entry["is_solid"] = brep.IsSolid
+            if brep.IsSolid:
+                entry["volume"] = brep.GetVolume()
+                mp = Rhino.Geometry.VolumeMassProperties.Compute(brep)
+                if mp is not None:
+                    c = mp.Centroid
+                    entry["centroid"] = [c.X, c.Y, c.Z]
+        else:
+            entry["area"] = None
+            entry["is_solid"] = False
+        items.append(entry)
+    return [], {"objects": items, "missing": missing}
+
+
 _HANDLERS = {
     "create_curve": op_create_curve,
     "extrude": op_extrude,
     "boolean": op_boolean,
     "delete": op_delete,
     "query": op_query,
+    "loft": op_loft,
+    "mirror": op_mirror,
+    "split": op_split,
+    "offset_srf": op_offset_srf,
+    "mass_properties": op_mass_properties,
 }
 
 
@@ -323,6 +494,15 @@ def _execute(request):
                 pass
         code = "geometry_failure" if "布尔" in str(exc) or "挤出" in str(exc) else "invalid_params"
         return {"request_id": rid, "state": "failed", "error": _error(code, str(exc))}
+    except RuntimeError as exc:
+        if undo:
+            try:
+                sc.doc.Undo()
+            except Exception:  # noqa: BLE001
+                pass
+        # Rhino API 版本差异：明确告知是桥接侧能力问题，不是用户几何有问题
+        return {"request_id": rid, "state": "failed",
+                "error": _error("internal", str(exc))}
     except Exception as exc:  # noqa: BLE001
         if undo:
             try:

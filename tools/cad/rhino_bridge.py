@@ -24,13 +24,30 @@ logger = get_logger(__name__)
 #: 破坏性操作：写入文档前必须确认
 DESTRUCTIVE_OPERATIONS = frozenset({"boolean", "delete"})
 
+
+def _needs_confirm(operation: str, params: dict) -> bool:
+    """是否需要用户确认
+
+    - boolean / delete：本身就会改变或删除既有几何；
+    - split：keep_input=false 会删掉原始对象，等同于删除，需确认；
+      keep_input=true 只新增片体，属非破坏。
+    """
+    if operation in DESTRUCTIVE_OPERATIONS:
+        return True
+    if operation == "split" and not bool(params.get("keep_input", False)):
+        return True
+    return False
+
 RHINO_MANIFEST = ToolManifest(
     tool_id="rhino_bridge",
     name="Rhino 建模桥接",
     description=(
         "通过本地桥接，在已打开的 Rhino 8 中执行建模操作。"
-        "支持 create_curve（插值曲线）、extrude（沿曲线平面法向挤出）、"
-        "boolean（并/差/交）、delete（删除对象）、query（查几何摘要）。"
+        "通用：create_curve（插值曲线）、extrude（沿曲线法向挤出）、boolean（并/差/交）、"
+        "delete、query。"
+        "船体建模：loft（断面曲线放样成船体曲面/实体）、mirror（镜像到另一舷）、"
+        "split（按平面切分甲板/艉封板）、offset_srf（偏移成壳/板厚）、"
+        "mass_properties（面积/体积/质心，用于核对排水量）。"
         "boolean 与 delete 属于破坏性操作，bake=true 时必须带 confirm=true。"
         "Rhino 未启动或桥接未运行时，会明确返回「桥接未连接」，不会伪造结果。"
     ),
@@ -46,10 +63,15 @@ RHINO_MANIFEST = ToolManifest(
             "params": {
                 "type": "object",
                 "description": (
-                    "操作参数。create_curve: {points:[[x,y,z]...], degree?, closed?}；"
-                    "extrude: {curve_id, height, cap?}；"
-                    "boolean: {brep_id_a, brep_id_b, operation:union|difference|intersection, tolerance}；"
-                    "delete: {object_ids:[...]}；query: {object_ids:[...]}"
+                    "操作参数。\n"
+                    "create_curve: {points:[[x,y,z]...], degree?, closed?}\n"
+                    "extrude: {curve_id, height, cap?}\n"
+                    "boolean: {brep_id_a, brep_id_b, operation:union|difference|intersection, tolerance}\n"
+                    "delete / query / mass_properties: {object_ids:[...]}\n"
+                    "loft: {curve_ids:[...], closed?, solid?}\n"
+                    "mirror: {object_ids:[...], plane?:yz|xz|xy, copy?}\n"
+                    "split: {object_ids:[...], plane?:yz|xz|xy, keep_input?}\n"
+                    "offset_srf: {object_id, distance, solid?}"
                 ),
             },
             "bake": {
@@ -169,13 +191,14 @@ class RhinoBridgeTool(BaseTool):
                 "detail": err.get("detail"),
             }
 
-        if bake and operation in DESTRUCTIVE_OPERATIONS and not confirm:
+        if bake and _needs_confirm(operation, checked["params"]) and not confirm:
             return {
                 "status": "error",
                 "message": (
                     f"{operation} 会修改 Rhino 文档，需要用户确认。"
                     "请先说明将要执行的几何变更并征得同意，再用 confirm=true 调用；"
-                    "或使用 bake=false 先做预览（delete 无预览语义）。"
+                    "或使用 bake=false 先做预览（delete 无预览语义；"
+                    "split 可改用 keep_input=true 保留原件）。"
                 ),
                 "code": "confirmation_required",
             }

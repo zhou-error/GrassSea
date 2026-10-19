@@ -30,7 +30,10 @@ def test_unknown_operation():
 
 
 def test_operation_whitelist():
-    assert ALLOWED_OPERATIONS == {"create_curve", "extrude", "boolean", "delete", "query"}
+    assert ALLOWED_OPERATIONS == {
+        "create_curve", "extrude", "boolean", "delete", "query",
+        "loft", "mirror", "split", "offset_srf", "mass_properties",
+    }
 
 
 def test_params_must_be_dict():
@@ -176,3 +179,74 @@ def test_query_ok():
 
 def test_query_too_many():
     bad("query", {"object_ids": [VALID_GUID] * 501}, field="object_ids")
+
+
+# ---------------- loft（放样） ----------------
+
+def test_loft_ok():
+    p = ok("loft", {"curve_ids": [VALID_GUID, VALID_GUID_2], "solid": True}, unit="mm")
+    assert p["solid"] is True and len(p["curve_ids"]) == 2
+
+
+def test_loft_needs_two_curves():
+    bad("loft", {"curve_ids": [VALID_GUID]}, field="curve_ids")
+
+
+def test_loft_bad_guid():
+    bad("loft", {"curve_ids": [VALID_GUID, "x"]}, field="curve_ids[1]")
+
+
+# ---------------- mirror（镜像） ----------------
+
+def test_mirror_default_yz():
+    p = ok("mirror", {"object_ids": [VALID_GUID]})
+    assert p["plane"] == "yz" and p["copy"] is True
+
+
+def test_mirror_bad_plane():
+    bad("mirror", {"object_ids": [VALID_GUID], "plane": "zz"}, field="plane")
+
+
+def test_mirror_empty_ids():
+    bad("mirror", {"object_ids": []}, field="object_ids")
+
+
+# ---------------- split（切分） ----------------
+
+def test_split_ok():
+    p = ok("split", {"object_ids": [VALID_GUID], "plane": "xy"})
+    assert p["plane"] == "xy" and p["keep_input"] is False
+
+
+def test_split_bad_plane():
+    bad("split", {"object_ids": [VALID_GUID], "plane": "xz2"}, field="plane")
+
+
+# ---------------- offset_srf（板厚） ----------------
+
+def test_offset_ok():
+    p = ok("offset_srf", {"object_id": VALID_GUID, "distance": -12}, unit="mm")
+    assert p["solid"] is True
+
+
+def test_offset_zero_rejected():
+    bad("offset_srf", {"object_id": VALID_GUID, "distance": 0}, field="distance")
+
+
+def test_offset_ship_plate_scale_ok():
+    """20 mm 板厚在 mm 单位下就是 20，必须通过"""
+    ok("offset_srf", {"object_id": VALID_GUID, "distance": 20}, unit="mm")
+
+
+def test_offset_too_large():
+    bad("offset_srf", {"object_id": VALID_GUID, "distance": 5_000_000}, unit="mm", field="distance")
+
+
+# ---------------- mass_properties ----------------
+
+def test_mass_properties_ok():
+    ok("mass_properties", {"object_ids": [VALID_GUID, VALID_GUID_2]})
+
+
+def test_mass_properties_empty():
+    bad("mass_properties", {"object_ids": []}, field="object_ids")

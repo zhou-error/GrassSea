@@ -98,6 +98,22 @@ set GRASSEA_DATA_DIR=F:\GrassSea\data
 | `boolean` | `brep_id_a`, `brep_id_b`, `operation`, `tolerance` | tolerance 按文档单位 |
 | `delete` | `object_ids` | 忽略 bake，需 confirm |
 | `query` | `object_ids` | 返回 type / bounding_box / brep_face_count |
+| `loft` | `curve_ids`, `closed?`, `solid?` | **船体主操作**：断面曲线放样成曲面/实体 |
+| `mirror` | `object_ids`, `plane?`, `copy?` | 默认 yz 平面（镜像到另一舷） |
+| `split` | `object_ids`, `plane?`, `keep_input?` | 切甲板/艉封板；keep_input=false 删原件 |
+| `offset_srf` | `object_id`, `distance`, `solid?` | 板厚壳体；负值向内偏移 |
+| `mass_properties` | `object_ids` | 面积/体积/质心，核对排水量 |
+
+### 船体建模推荐顺序
+
+```
+1. create_curve × N   按型值表逐条建横剖面（或水线、纵剖线）
+2. loft               放样成船体曲面（断面方向必须一致）
+3. mirror             镜像到另一舷（只建半船时）
+4. split              切甲板线 / 艉封板
+5. offset_srf         生成板厚壳体
+6. mass_properties    核对体积 → 与 hydrostatics 排水量对照
+```
 
 长度阈值按**文档单位换算到米**判断：0.001–1000 m。
 所以 mm 文档里 400000（=400 m 船体）是合法的。

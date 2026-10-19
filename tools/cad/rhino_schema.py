@@ -16,11 +16,18 @@ from typing import Any
 
 #: 首期允许的操作（与 rhino/bridge.py 的白名单保持一致，两处都要改）
 ALLOWED_OPERATIONS: frozenset[str] = frozenset({
+    # --- 通用 ---
     "create_curve",
     "extrude",
     "boolean",
     "delete",
     "query",
+    # --- 船体建模 ---
+    "loft",            # 断面曲线放样成船体曲面/实体
+    "mirror",          # 镜像到另一舷
+    "split",           # 按平面切分（甲板/艉封板/水线）
+    "offset_srf",      # 偏移成壳（板厚）
+    "mass_properties", # 面积/体积/质心（校验排水量）
 })
 
 #: 文档单位 -> 米 的换算系数
@@ -228,12 +235,111 @@ def _validate_ids(params: dict, factor: float) -> dict:
     return {"ok": True, "params": {"object_ids": ids}}
 
 
+# ---------------------------------------------------------------- 船体建模
+
+#: 世界平面名 -> 法向
+PLANE_NORMALS = {"yz": (1.0, 0.0, 0.0), "xz": (0.0, 1.0, 0.0), "xy": (0.0, 0.0, 1.0)}
+
+MAX_LOFT_CURVES = 200
+
+
+def _plane(value: Any, field: str) -> tuple[str | None, dict | None]:
+    if value not in PLANE_NORMALS:
+        return None, _fail(field, "必须是 yz / xz / xy 之一", list(PLANE_NORMALS))
+    return value, None
+
+
+def _guid_list(raw: Any, field: str, minimum: int, maximum: int) -> tuple[list[str] | None, dict | None]:
+    if not isinstance(raw, list):
+        return None, _fail(field, "必须是数组", "[guid, ...]")
+    if not minimum <= len(raw) <= maximum:
+        return None, _fail(field, f"数量必须在 {minimum}..{maximum} 之间", f"{minimum}..{maximum}")
+    ids: list[str] = []
+    for idx, value in enumerate(raw):
+        guid, err = _guid(value, f"{field}[{idx}]")
+        if err:
+            return None, err
+        ids.append(guid)
+    return ids, None
+
+
+def _validate_loft(params: dict, factor: float) -> dict:
+    ids, err = _guid_list(params.get("curve_ids"), "curve_ids", 2, MAX_LOFT_CURVES)
+    if err:
+        return err
+    closed, err = _bool(params.get("closed"), "closed", False)
+    if err:
+        return err
+    solid, err = _bool(params.get("solid"), "solid", False)
+    if err:
+        return err
+    return {"ok": True, "params": {"curve_ids": ids, "closed": closed, "solid": solid}}
+
+
+def _validate_mirror(params: dict, factor: float) -> dict:
+    ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
+    if err:
+        return err
+    plane, err = _plane(params.get("plane", "yz"), "plane")
+    if err:
+        return err
+    copy, err = _bool(params.get("copy"), "copy", True)
+    if err:
+        return err
+    return {"ok": True, "params": {"object_ids": ids, "plane": plane, "copy": copy}}
+
+
+def _validate_split(params: dict, factor: float) -> dict:
+    ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
+    if err:
+        return err
+    plane, err = _plane(params.get("plane", "yz"), "plane")
+    if err:
+        return err
+    keep_input, err = _bool(params.get("keep_input"), "keep_input", False)
+    if err:
+        return err
+    return {"ok": True, "params": {"object_ids": ids, "plane": plane, "keep_input": keep_input}}
+
+
+def _validate_offset_srf(params: dict, factor: float) -> dict:
+    object_id, err = _guid(params.get("object_id"), "object_id")
+    if err:
+        return err
+    distance, err = _finite(params.get("distance"), "distance")
+    if err:
+        return err
+    dist_m = abs(distance) * factor
+    if not MIN_EXTENT_M <= dist_m <= MAX_EXTENT_M:
+        return _fail(
+            "distance",
+            f"偏移距离换算后为 {dist_m:g} m，超出 {MIN_EXTENT_M:g}..{MAX_EXTENT_M:g} m",
+            f"{MIN_EXTENT_M/factor:g}..{MAX_EXTENT_M/factor:g}（当前单位）",
+        )
+    solid, err = _bool(params.get("solid"), "solid", True)
+    if err:
+        return err
+    return {"ok": True, "params": {"object_id": object_id, "distance": distance, "solid": solid}}
+
+
+def _validate_mass_properties(params: dict, factor: float) -> dict:
+    ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
+    if err:
+        return err
+    return {"ok": True, "params": {"object_ids": ids}}
+
+
 _VALIDATORS = {
     "create_curve": _validate_create_curve,
     "extrude": _validate_extrude,
     "boolean": _validate_boolean,
     "delete": _validate_ids,
     "query": _validate_ids,
+    "loft": _validate_loft,
+    "mirror": _validate_mirror,
+    "split": _validate_split,
+    "offset_srf": _validate_offset_srf,
+    "mass_properties": _validate_mass_properties,
 }
 
 
