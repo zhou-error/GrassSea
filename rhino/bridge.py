@@ -17,6 +17,7 @@
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -106,12 +107,24 @@ def _units() -> str:
         return "mm"
 
 
+_GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
 def _guid(text):
     """字符串 -> System.Guid（Rhino 的对象 id 类型）
 
-    注意：不存在 Rhino.Geometry.Guid，必须用 System.Guid（真机踩到，报 AttributeError）。
+    两点注意：
+    1. 不存在 Rhino.Geometry.Guid，必须用 System.Guid（真机踩到，报 AttributeError）；
+    2. 先自查格式再构造。System.Guid 对非法字符串抛的是 System.ArgumentException，
+       不走 ValueError 分支，会被归类成 internal（真机踩到）。这里主动抛 ValueError，
+       让上层映射成 invalid_params。
     """
-    return Guid(str(text))
+    raw = str(text).strip()
+    if not _GUID_RE.match(raw):
+        raise ValueError(f"不是合法的 GUID：{text}")
+    return Guid(raw)
 
 
 def _uuid_from_obj_id(obj_id):
