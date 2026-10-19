@@ -160,18 +160,38 @@ class ConfigUpdateRequest(BaseModel):
 
 
 def _read_env() -> dict[str, str]:
-    """读取配置：.env 文件 + os.environ（包含解密后的 Key）"""
+    """只读 .env 文件本身（用于写回，绝不能混入 os.environ）
+
+    历史事故：这里曾把**整个 os.environ** 合并进来，而 update_config 又把
+    结果写回 .env，导致 Windows 环境变量（PATH / TEMP / USERNAME / PYCHARM…）
+    被灌进配置文件，最终 .env 里出现键名带空格的行（"PYCHARM COMMUNITY
+    EDITION"），dotenv 直接解析失败。
+    """
     envs: dict[str, str] = {}
     if ENV_FILE.exists():
         for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
-                envs[k.strip()] = v.strip().strip('"').strip("'")
-    # os.environ 覆盖 .env（含解密后的敏感 Key）
-    for k in os.environ:
-        if k not in envs or envs[k].startswith("your-"):
-            envs[k] = os.environ[k]
+                key = k.strip()
+                # 键名含空格等非法字符的行直接跳过（防止历史污染继续传播）
+                if not key or not all(ch.isalnum() or ch in "_-." for ch in key):
+                    continue
+                envs[key] = v.strip().strip('"').strip("'")
+    return envs
+
+
+def _effective_env() -> dict[str, str]:
+    """展示用：.env 的值 + os.environ 中**已知配置键**的覆盖
+
+    只叠加 CONFIG_SCHEMA 里出现的键，避免把系统环境变量混进来。
+    """
+    envs = _read_env()
+    known = {item["key"] for item in CONFIG_SCHEMA}
+    for key in known:
+        value = os.environ.get(key)
+        if value is not None and (key not in envs or envs[key].startswith("your-")):
+            envs[key] = value
     return envs
 
 
@@ -275,7 +295,7 @@ async def _propagate_all_secrets(max_retries: int = 5, retry_delay: float = 3.0)
 @router.get("/schema", response_model=list[ConfigItemResponse])
 async def get_config_schema():
     """获取所有可配置项（含当前值）"""
-    envs = _read_env()
+    envs = _effective_env()
     result = []
     for item in CONFIG_SCHEMA:
         value = envs.get(item["key"], item.get("default", ""))

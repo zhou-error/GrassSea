@@ -20,6 +20,7 @@ const categoryInfo: Record<string, { icon: string; desc: string }> = {
   搜索: { icon: '🔍', desc: '联网搜索引擎 API 密钥 / Search engine API keys' },
   工具调用: { icon: '🛠️', desc: '模型自主调用工具 / Autonomous tool calling' },
   文档: { icon: '📄', desc: 'Word 排版与 PDF 转换 / Word layout & PDF conversion' },
+  CAD: { icon: '📐', desc: 'Rhino 桥接与三维建模 / Rhino bridge & 3D modeling' },
 };
 
 const SettingsPage: React.FC = () => {

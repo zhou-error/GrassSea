@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 
 from shared.protocols.tool import BaseTool, ToolCategory, ToolManifest
@@ -128,14 +129,22 @@ class RhinoBridgeTool(BaseTool):
 
     @staticmethod
     def _read_token(token_file: str) -> str:
-        """从令牌文件读取（Rhino 侧脚本启动时写出）"""
-        if not token_file:
+        """取令牌
+
+        支持两种填法（实测用户把令牌值直接填进了"路径"栏）：
+        1. 32 位十六进制 → 视为令牌本身；
+        2. 其它 → 视为文件路径，读取内容。
+        """
+        raw = (token_file or "").strip()
+        if not raw:
             return ""
+        if re.fullmatch(r"[0-9a-fA-F]{32}", raw):
+            return raw
         try:
             from pathlib import Path
 
-            p = Path(token_file)
-            return p.read_text(encoding="utf-8").strip() if p.exists() else ""
+            path = Path(raw)
+            return path.read_text(encoding="utf-8").strip() if path.exists() else ""
         except OSError:
             return ""
 
@@ -165,10 +174,16 @@ class RhinoBridgeTool(BaseTool):
     async def execute(self, params: dict, context: dict) -> dict:
         enabled, url, token_file, timeout_ms = self._settings_bundle()
         if not enabled:
+            # 说明当前读到的实际值，避免"我明明开了"的困惑（多为改完未重启）
             return {
                 "status": "error",
-                "message": "Rhino 桥接未启用：请在设置页打开「Rhino 桥接」，或设置 RHINO_BRIDGE_ENABLED=true。",
+                "message": (
+                    "Rhino 桥接未启用（当前 RHINO_BRIDGE_ENABLED=false）。"
+                    "请在设置页「CAD」分类打开开关；若已打开仍报此错，"
+                    "说明运行中的服务仍是启动时的旧配置——重启 GrassSea 即可生效。"
+                ),
                 "code": "bridge_disabled",
+                "detail": {"enabled": enabled, "url": url},
             }
 
         operation = str(params.get("operation") or "").strip()
