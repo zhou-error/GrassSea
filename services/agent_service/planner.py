@@ -125,7 +125,10 @@ class TaskPlanner:
         return dag
 
     # 已真实实现的工具；其余工具调用会返回 not_implemented
-    IMPLEMENTED_TOOLS = {"hydrostatics", "stability", "resistance", "hull_transform"}
+    IMPLEMENTED_TOOLS = {
+        "hydrostatics", "stability", "resistance", "hull_transform",
+        "rhino_bridge",
+    }
 
     # 关键词 -> (智能体, 动作) 能力路由
     AGENT_ROUTES = (
@@ -136,6 +139,7 @@ class TaskPlanner:
         (("报告", "排版", "文档", "report"), "doc_agent", "report_gen"),
         (("文献", "检索", "调研", "趋势", "research"), "research_agent", "literature_search"),
         (("计划", "分解", "排期", "项目", "pm"), "pm_agent", "task_decomposition"),
+        (("建模", "rhino", "Rhino", "实体", "挤出", "布尔", "球体", "曲面"), "rhino_agent", "rhino_modeling"),
     )
 
     # 动作 -> 可并行执行的已实现校核工具
@@ -143,6 +147,7 @@ class TaskPlanner:
         "stability_calc": "hydrostatics",
         "resistance_calc": "resistance",
         "hull_design": "hull_transform",
+        "rhino_modeling": "rhino_bridge",
     }
 
     # 智能体 / 动作 / 工具的中文名称，用于生成面向用户的步骤描述
@@ -151,6 +156,7 @@ class TaskPlanner:
         "review_agent": "审查专家",
         "pm_agent": "项目经理",
         "cad_agent": "CAD 工程师",
+        "rhino_agent": "Rhino 建模工程师",
         "doc_agent": "文档工程师",
         "research_agent": "研究员",
     }
@@ -158,6 +164,7 @@ class TaskPlanner:
         "stability_calc": "完整稳性与初稳性计算",
         "resistance_calc": "阻力与推进性能计算",
         "hull_design": "型线设计与优化",
+        "rhino_modeling": "Rhino 三维建模",
         "general_analysis": "综合工程分析",
         "regulation_check": "规范符合性检查",
         "report_gen": "报告生成",
@@ -274,6 +281,7 @@ class TaskPlanner:
         tool_keywords = {
             "reg_check": ["审查", "合规", "检查", "规范"],
             "cad_draw": ["画", "绘制", "图", "型线", "CAD"],
+            "rhino_bridge": ["建模", "Rhino", "实体", "挤出", "布尔", "球体"],
             "hydrostatics": ["静水力", "排水量", "浮心", "稳心"],
             "stability": ["稳性", "横摇", "复原"],
             "resistance": ["阻力", "快速性", "推进"],
