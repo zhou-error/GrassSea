@@ -199,9 +199,15 @@ def test_loft_bad_guid():
 
 # ---------------- mirror（镜像） ----------------
 
-def test_mirror_default_yz():
+def test_mirror_default_xz():
+    """船体左右舷对称是 xz（y=0 中纵剖面），不是 yz（会把首尾翻转）"""
     p = ok("mirror", {"object_ids": [VALID_GUID]})
-    assert p["plane"] == "yz" and p["copy"] is True
+    assert p["plane"] == "xz" and p["copy"] is True
+
+
+def test_split_default_xy():
+    p = ok("split", {"object_ids": [VALID_GUID]})
+    assert p["plane"] == "xy"
 
 
 def test_mirror_bad_plane():

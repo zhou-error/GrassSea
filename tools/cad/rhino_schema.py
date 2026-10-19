@@ -250,6 +250,9 @@ def _validate_ids(params: dict, factor: float) -> dict:
 # ---------------------------------------------------------------- 船体建模
 
 #: 世界平面名 -> 法向
+#:   "yz" = x=0 平面（法向 X，镜像会首尾翻转）
+#:   "xz" = y=0 平面（法向 Y，**船体左右舷对称就是它**）
+#:   "xy" = z=0 平面（法向 Z，水平面，切甲板/水线用它）
 PLANE_NORMALS = {"yz": (1.0, 0.0, 0.0), "xz": (0.0, 1.0, 0.0), "xy": (0.0, 0.0, 1.0)}
 
 MAX_LOFT_CURVES = 200
@@ -292,7 +295,8 @@ def _validate_mirror(params: dict, factor: float) -> dict:
     ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
     if err:
         return err
-    plane, err = _plane(params.get("plane", "yz"), "plane")
+    # 默认 xz：船体中纵剖面对称（y -> -y）
+    plane, err = _plane(params.get("plane", "xz"), "plane")
     if err:
         return err
     copy, err = _bool(params.get("copy"), "copy", True)
@@ -305,7 +309,8 @@ def _validate_split(params: dict, factor: float) -> dict:
     ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
     if err:
         return err
-    plane, err = _plane(params.get("plane", "yz"), "plane")
+    # 默认 xy：水平面，最常用于切甲板线
+    plane, err = _plane(params.get("plane", "xy"), "plane")
     if err:
         return err
     keep_input, err = _bool(params.get("keep_input"), "keep_input", False)

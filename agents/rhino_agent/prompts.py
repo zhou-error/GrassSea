@@ -89,14 +89,19 @@ loft
         但船体首尾开敞时封口可能失败，此时只得到曲面。
 
 mirror
-  用途：按世界平面镜像（船体默认 yz，即镜像到另一舷）。
+  用途：按世界平面镜像（船体左右舷对称用 xz）。
   params: { object_ids: [guid,...], plane?: "yz"|"xz"|"xy", copy?: bool }
-  说明：只建一半船体时用它补齐；plane 缺省 yz。
+  说明：plane 缺省 xz（y=0 中纵剖面，y -> -y，镜像到另一舷）。
+        yz 是 x=0 平面（会把首尾翻转），做左右对称时不要用它；
+        xy 是 z=0 水平面。
+        copy=true 会复制并新增对象，原对象不变。
 
 split
   用途：按世界平面切分（甲板位置、艉封板、设计水线）。
   params: { object_ids: [guid,...], plane?: "yz"|"xz"|"xy", keep_input?: bool }
-  说明：keep_input=false 会删除原对象，只保留切出的片体；调用前必须告知用户。
+  说明：plane 缺省 xy（z=0 水平面），切甲板线通常要的是水平面；
+        切艉封板用 yz（x=常量方向）。
+        keep_input=false 会删除原对象，只保留切出的片体；调用前必须告知用户。
 
 offset_srf
   用途：偏移曲面生成壳体（板厚）。

@@ -100,8 +100,8 @@ set GRASSEA_DATA_DIR=F:\GrassSea\data
 | `query` | `object_ids` | 返回 type / bounding_box / brep_face_count |
 | `loft_sections` | `sections`, `closed_sections?`, `solid?`, `keep_curves?` | **船体首选**：断面点表直连放样，一次请求完成 |
 | `loft` | `curve_ids`, `closed?`, `solid?` | 按文档中已有曲线放样 |
-| `mirror` | `object_ids`, `plane?`, `copy?` | 默认 yz 平面（镜像到另一舷） |
-| `split` | `object_ids`, `plane?`, `keep_input?` | 切甲板/艉封板；keep_input=false 删原件 |
+| `mirror` | `object_ids`, `plane?`, `copy?` | 默认 **xz**（y=0 中纵剖面，镜像到另一舷）；yz 会把首尾翻转 |
+| `split` | `object_ids`, `plane?`, `keep_input?` | 默认 **xy**（水平面，切甲板）；keep_input=false 删原件 |
 | `offset_srf` | `object_id`, `distance`, `solid?` | 板厚壳体；负值向内偏移 |
 | `join` | `object_ids`, `keep_input?` | 缝合曲面成整体，形成封闭实体的关键 |
 | `mass_properties` | `object_ids` | 面积/体积/质心，核对排水量 |

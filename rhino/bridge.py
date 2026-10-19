@@ -450,15 +450,32 @@ def op_mirror(params, dry_run=False):
     ids = []
     if dry_run:
         return [], {"type": "Mirror", "count": len(params["object_ids"]), "copy": copy, "dry_run": True}
+
     for text in params["object_ids"]:
         guid = _guid(text)
-        if sc.doc.Objects.FindId(guid) is None:
+        obj = sc.doc.Objects.FindId(guid)
+        if obj is None:
             raise LookupError(f"找不到对象：{text}")
-        # 正确 API 是 sc.doc.Objects.Transform，不是 RhinoDoc.Transform
-        # （真机踩到：AttributeError: type object 'RhinoDoc' has no attribute 'Transform'）
-        new_id = sc.doc.Objects.Transform(guid, xform, copy)
+
+        if not copy:
+            # 原地镜像
+            if not sc.doc.Objects.Transform(guid, xform, False):
+                raise ValueError(f"镜像失败：{text}")
+            ids.append(str(_uuid_from_obj_id(_guid(text))))
+            continue
+
+        # 复制模式：复制几何 -> 变换副本 -> 新增。
+        # 不再用 Objects.Transform(..., True)：真机实测它**并没有复制**，
+        # 而是把原对象原地镜像（bbox 的 x 从 [-4474, 55525] 变成 [-55525, 4474]），
+        # 且返回的仍是原 id —— 既毁原对象又不产生新对象。
+        dup = obj.Geometry.Duplicate()
+        if dup is None:
+            raise ValueError(f"无法复制几何：{text}")
+        dup.Transform(xform)
+        attrs = obj.Attributes.Duplicate() if obj.Attributes else None
+        new_id = sc.doc.Objects.Add(dup, attrs) if attrs is not None else sc.doc.Objects.Add(dup)
         if new_id == Guid.Empty:
-            raise ValueError(f"镜像失败：{text}")
+            raise ValueError(f"镜像后新增对象失败：{text}")
         ids.append(str(_uuid_from_obj_id(_record(new_id))))
     return ids, {"type": "Mirror", "count": len(ids), "copy": copy}
 
