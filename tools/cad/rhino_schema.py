@@ -16,6 +16,7 @@ from typing import Any
 
 #: 首期允许的操作（与 rhino/bridge.py 的白名单保持一致，两处都要改）
 ALLOWED_OPERATIONS: frozenset[str] = frozenset({
+    "loft_sections",   # 断面点表 -> 曲线 -> 放样（一次请求，避免逐条建曲线后无法接放样）
     # --- 通用 ---
     "create_curve",
     "extrude",
@@ -132,6 +133,16 @@ def _validate_create_curve(params: dict, factor: float) -> dict:
         return err
     if closed and len(clean) < 3:
         return _fail("points", "闭合曲线至少需要 3 个点", ">= 3")
+
+    # 退化检查：所有点重合时曲线长度为 0，放样会失败
+    distinct = {tuple(p) for p in clean}
+    need = 3 if closed else 2
+    if len(distinct) < need:
+        return _fail(
+            "points",
+            f"断面退化：只有 {len(distinct)} 个互不相同的点（至少需要 {need} 个）",
+            f"至少 {need} 个不同坐标",
+        )
 
     upper = min(MAX_DEGREE, len(clean) - 1)
     if "degree" not in params or params.get("degree") is None:
@@ -322,6 +333,74 @@ def _validate_offset_srf(params: dict, factor: float) -> dict:
     return {"ok": True, "params": {"object_id": object_id, "distance": distance, "solid": solid}}
 
 
+def _validate_loft_sections(params: dict, factor: float) -> dict:
+    """船体放样批处理：每层给出点位，内部建曲线再放样
+
+    存在的理由：bake=false 的预览不返回 object_ids，因此「逐条建曲线 → 用 id 放样」
+    这条链在预览后无法继续。这个操作把两步合并成一次原子请求。
+    """
+    raw = params.get("sections")
+    if not isinstance(raw, list):
+        return _fail("sections", "必须是断面数组", "[[[x,y,z],...], ...]")
+    if not 2 <= len(raw) <= MAX_LOFT_CURVES:
+        return _fail("sections", f"断面数必须在 2..{MAX_LOFT_CURVES} 之间", f"2..{MAX_LOFT_CURVES}")
+
+    closed_sections, err = _bool(params.get("closed_sections"), "closed_sections", False)
+    if err:
+        return err
+
+    clean_sections: list[list[list[float]]] = []
+    for s_idx, section in enumerate(raw):
+        if not isinstance(section, list):
+            return _fail(f"sections[{s_idx}]", "必须是点数组", "[[x,y,z], ...]")
+        if not 2 <= len(section) <= MAX_POINTS:
+            return _fail(f"sections[{s_idx}]", "点数不合法", f"2..{MAX_POINTS}")
+        pts: list[list[float]] = []
+        for p_idx, point in enumerate(section):
+            if not isinstance(point, (list, tuple)) or len(point) != 3:
+                return _fail(f"sections[{s_idx}][{p_idx}]", "必须是 [x,y,z]", "[x, y, z]")
+            triple: list[float] = []
+            for axis, value in zip(("x", "y", "z"), point):
+                num, e2 = _finite(value, f"sections[{s_idx}][{p_idx}].{axis}")
+                if e2:
+                    return e2
+                triple.append(num)
+            pts.append(triple)
+        need = 3 if closed_sections else 2
+        if len({tuple(p) for p in pts}) < need:
+            return _fail(
+                f"sections[{s_idx}]",
+                f"断面退化：至少需要 {need} 个互不相同的点",
+                f"至少 {need} 个不同坐标",
+            )
+        clean_sections.append(pts)
+
+    solid, err = _bool(params.get("solid"), "solid", False)
+    if err:
+        return err
+    keep_curves, err = _bool(params.get("keep_curves"), "keep_curves", False)
+    if err:
+        return err
+
+    degree = params.get("degree")
+    if degree is not None:
+        if isinstance(degree, bool) or not isinstance(degree, int):
+            return _fail("degree", "必须是整数", f"1..{MAX_DEGREE}")
+        if not 1 <= degree <= MAX_DEGREE:
+            return _fail("degree", f"阶数必须在 1..{MAX_DEGREE} 之间", f"1..{MAX_DEGREE}")
+
+    return {
+        "ok": True,
+        "params": {
+            "sections": clean_sections,
+            "closed_sections": closed_sections,
+            "solid": solid,
+            "keep_curves": keep_curves,
+            "degree": degree,
+        },
+    }
+
+
 def _validate_mass_properties(params: dict, factor: float) -> dict:
     ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
     if err:
@@ -340,6 +419,7 @@ _VALIDATORS = {
     "split": _validate_split,
     "offset_srf": _validate_offset_srf,
     "mass_properties": _validate_mass_properties,
+    "loft_sections": _validate_loft_sections,
 }
 
 

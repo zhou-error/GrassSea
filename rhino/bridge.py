@@ -44,6 +44,7 @@ ALLOWED_OPERATIONS = {
     "create_curve", "extrude", "boolean", "delete", "query",
     # 船体建模
     "loft", "mirror", "split", "offset_srf", "mass_properties",
+    "loft_sections",
 }
 
 #: 世界平面名 -> 法向（与 GrassSea 侧 rhino_schema.PLANE_NORMALS 保持一致）
@@ -287,6 +288,79 @@ def _curve_of(obj_id_text):
     return curve
 
 
+def _curve_from_points(points, degree=None, closed=False):
+    """点表 -> 曲线（loft_sections 与 create_curve 共用）"""
+    pts = [Rhino.Geometry.Point3d(p[0], p[1], p[2]) for p in points]
+    deg = int(degree) if degree else min(3, len(pts) - 1)
+    curve = Rhino.Geometry.Curve.CreateInterpolatedCurve(pts, deg)
+    if curve is None:
+        raise ValueError("曲线创建失败：点集可能共线或退化")
+    if closed:
+        curve.MakeClosed(1e-6)
+    if not curve.IsValid:
+        raise ValueError("曲线无效（自交或点序异常）")
+    return curve
+
+
+def op_loft_sections(params, dry_run=False):
+    """断面点表 -> 曲线 -> 放样，一次请求完成
+
+    解决「预览不返回 object_ids，导致无法逐条建曲线后再放样」的问题：
+    模型只要给出断面点，本操作内部完成建曲线与放样。
+    """
+    sections = params["sections"]
+    closed_sections = bool(params.get("closed_sections", False))
+    solid = bool(params.get("solid", False))
+    keep_curves = bool(params.get("keep_curves", False))
+    degree = params.get("degree")
+    tol = sc.doc.ModelAbsoluteTolerance
+
+    curves = [
+        _curve_from_points(sec, degree, closed_sections) for sec in sections
+    ]
+    total_length = sum(c.GetLength() for c in curves)
+
+    breps = Rhino.Geometry.Brep.CreateFromLoft(
+        curves,
+        Rhino.Geometry.Point3d.Unset,
+        Rhino.Geometry.Point3d.Unset,
+        Rhino.Geometry.LoftType.Normal,
+        False,
+    )
+    if not breps or len(breps) == 0:
+        raise ValueError(
+            "放样失败：断面曲线可能方向不一致、点数差异过大或存在退化断面"
+        )
+
+    brep = breps[0]
+    if solid:
+        capped = brep.CapPlanarHoles(tol)
+        if capped is not None:
+            brep = capped
+
+    preview = {
+        "type": "Brep(Loft)",
+        "sections": len(sections),
+        "curve_length_total": total_length,
+        "area": brep.GetArea(),
+        "is_solid": brep.IsSolid,
+    }
+    if brep.IsSolid:
+        preview["volume"] = brep.GetVolume()
+
+    if dry_run:
+        preview["dry_run"] = True
+        return [], preview
+
+    curve_ids = []
+    if keep_curves:
+        for curve in curves:
+            curve_ids.append(str(_uuid_from_obj_id(sc.doc.Objects.AddCurve(curve))))
+    loft_id = str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(brep)))
+    preview["curve_ids"] = curve_ids
+    return [loft_id], preview
+
+
 def op_loft(params, dry_run=False):
     """把多条断面曲线放样成船体曲面/实体"""
     curves = [_curve_of(cid) for cid in params["curve_ids"]]
@@ -438,6 +512,7 @@ _HANDLERS = {
     "delete": op_delete,
     "query": op_query,
     "loft": op_loft,
+    "loft_sections": op_loft_sections,
     "mirror": op_mirror,
     "split": op_split,
     "offset_srf": op_offset_srf,
@@ -466,12 +541,18 @@ def _execute(request):
     undo = None
     try:
         writing = bake and not dry_run and operation != "query"
+        undo_serial = None
         if writing:
-            sc.doc.BeginUndoRecord(f"GrassSea: {operation}")
+            # BeginUndoRecord 返回 uint 序号，EndUndoRecord 必须把它传回去。
+            # 真机踩到：EndUndoRecord() 无参调用 -> "No overload takes 0 arguments"，
+            # 导致所有 bake=true 的写入全部失败。
+            undo_serial = sc.doc.BeginUndoRecord(f"GrassSea: {operation}")
             undo = True
         object_ids, preview = handler(params, dry_run)
-        if undo:
-            sc.doc.EndUndoRecord()
+        if undo_serial is not None:
+            sc.doc.EndUndoRecord(undo_serial)
+        elif undo:
+            sc.doc.EndUndoRecord(0)
         if writing:
             sc.doc.Views.Redraw()
         return {

@@ -74,8 +74,16 @@ query
 
 --- 船体建模专用 ---
 
+loft_sections
+  用途：**船体放样首选**。直接给断面点表，内部建曲线再放样，一次请求完成。
+  params: { sections: [[[x,y,z],...], ...]（2..200 层）, closed_sections?: bool,
+            solid?: bool, keep_curves?: bool, degree?: 1..3 }
+  说明：因为 bake=false 的预览**不返回 object_ids**，「逐条 create_curve 再 loft」
+        这条链在预览后接不上；用本操作可以一次完成，且先 dry_run 预览面积/体积。
+        断面点必须互不相同（全重合会被拒），首尾退化断面建议留 1 个非零半径。
+
 loft
-  用途：把多条断面曲线放样成船体曲面（这是船体建模的主操作）。
+  用途：把**已存在**于文档中的多条断面曲线放样成船体曲面。
   params: { curve_ids: [guid, ...]（至少 2 条）, closed?: bool, solid?: bool }
   说明：断面曲线应顺序一致、方向一致；solid=true 会尝试封口，
         但船体首尾开敞时封口可能失败，此时只得到曲面。
@@ -147,7 +155,9 @@ GEOMETRY_VALIDATION = """提交前你要做最小校验；校验不通过就不�
 单位一律以桥接返回的 unit 为准，不要假设是米。
 
 船体建模额外注意：
+- 首选 loft_sections（点表直连放样），避免"预览拿不到 id 无法接放样"的断链；
 - loft 的 curve_ids 至少 2 条，且各断面曲线方向必须一致，否则放样会扭曲或失败；
+- 断面退化（所有点重合）会被校验直接拒绝，不要用同一个点重复凑数；
 - split 在 keep_input=false 时会删除原对象，属破坏性操作，需确认并说明（keep_input=true 则非破坏）；
 - mass_properties 只读，但体积只有闭合实体才有效，未闭合请如实说明。
 """

@@ -33,6 +33,7 @@ def test_operation_whitelist():
     assert ALLOWED_OPERATIONS == {
         "create_curve", "extrude", "boolean", "delete", "query",
         "loft", "mirror", "split", "offset_srf", "mass_properties",
+        "loft_sections",
     }
 
 
@@ -250,3 +251,43 @@ def test_mass_properties_ok():
 
 def test_mass_properties_empty():
     bad("mass_properties", {"object_ids": []}, field="object_ids")
+
+
+# ---------------- 退化断面 ----------------
+
+def test_curve_degenerate_closed_rejected():
+    """所有点重合：长度为 0，必须拒绝（真机模型曾用它凑数）"""
+    bad("create_curve", {"points": [[0, 0, -600]] * 9, "closed": True}, field="points")
+
+
+def test_curve_degenerate_open_rejected():
+    bad("create_curve", {"points": [[0, 0, 0], [0, 0, 0]]}, field="points")
+
+
+# ---------------- loft_sections（船体放样首选） ----------------
+
+ELLIPSE_8 = [
+    [1000, 0, 0], [707.1, 707.1, 0], [0, 1000, 0], [-707.1, 707.1, 0],
+    [-1000, 0, 0], [-707.1, -707.1, 0], [0, -1000, 0], [707.1, -707.1, 0],
+]
+
+
+def test_loft_sections_ok():
+    p = ok("loft_sections", {"sections": [ELLIPSE_8, ELLIPSE_8], "solid": True}, unit="mm")
+    assert len(p["sections"]) == 2 and p["solid"] is True
+
+
+def test_loft_sections_needs_two():
+    bad("loft_sections", {"sections": [ELLIPSE_8]}, field="sections")
+
+
+def test_loft_sections_degenerate():
+    bad("loft_sections", {"sections": [[[0, 0, 0]] * 8] * 2}, field="sections[0]")
+
+
+def test_loft_sections_bad_point():
+    bad("loft_sections", {"sections": [ELLIPSE_8, [[0, 0]] * 8]}, field="sections[1][0]")
+
+
+def test_loft_sections_degree_out_of_range():
+    bad("loft_sections", {"sections": [ELLIPSE_8, ELLIPSE_8], "degree": 9}, field="degree")
