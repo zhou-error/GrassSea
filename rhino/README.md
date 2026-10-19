@@ -103,6 +103,7 @@ set GRASSEA_DATA_DIR=F:\GrassSea\data
 | `mirror` | `object_ids`, `plane?`, `copy?` | 默认 yz 平面（镜像到另一舷） |
 | `split` | `object_ids`, `plane?`, `keep_input?` | 切甲板/艉封板；keep_input=false 删原件 |
 | `offset_srf` | `object_id`, `distance`, `solid?` | 板厚壳体；负值向内偏移 |
+| `join` | `object_ids`, `keep_input?` | 缝合曲面成整体，形成封闭实体的关键 |
 | `mass_properties` | `object_ids` | 面积/体积/质心，核对排水量 |
 
 ### 船体建模推荐顺序

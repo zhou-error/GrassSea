@@ -45,6 +45,7 @@ ALLOWED_OPERATIONS = {
     # 船体建模
     "loft", "mirror", "split", "offset_srf", "mass_properties",
     "loft_sections",
+    "join",
 }
 
 #: 世界平面名 -> 法向（与 GrassSea 侧 rhino_schema.PLANE_NORMALS 保持一致）
@@ -56,6 +57,16 @@ PROTOCOL_VERSION = 1
 # ---------------------------------------------------------------- 状态
 
 _lock = threading.Lock()
+#: 本次请求中已创建的对象 id —— 失败时只删这些，不用 doc.Undo()
+#: （真机踩到：doc.Undo() 会把**上一次成功**的几何一并撤销掉，造成数据丢失）
+_created_ids = []
+
+
+def _record(new_id):
+    """登记新创建的对象 id"""
+    if new_id != Guid.Empty:
+        _created_ids.append(new_id)
+    return new_id
 _results = {}          # request_id -> 结果 dict
 _executed = []         # 已执行过的 request_id（幂等缓存，按序裁剪）
 _pending = []          # 待执行请求
@@ -166,7 +177,7 @@ def op_create_curve(params, dry_run=False):
 
     if dry_run:
         return [], {"type": "Curve", "length": curve.GetLength(), "dry_run": True}
-    obj_id = sc.doc.Objects.AddCurve(curve)
+    obj_id = _record(sc.doc.Objects.AddCurve(curve))
     return [str(_uuid_from_obj_id(obj_id))], {"type": "Curve", "length": curve.GetLength()}
 
 
@@ -195,7 +206,7 @@ def op_extrude(params, dry_run=False):
     if dry_run:
         preview["dry_run"] = True
         return [], preview
-    obj_id = sc.doc.Objects.AddExtrusion(extrusion)
+    obj_id = _record(sc.doc.Objects.AddExtrusion(extrusion))
     return [str(_uuid_from_obj_id(obj_id))], preview
 
 
@@ -229,7 +240,7 @@ def op_boolean(params, dry_run=False):
         return [], {"type": "Brep", "count": len(result), "dry_run": True}
     ids = []
     for brep in result:
-        ids.append(str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(brep))))
+        ids.append(str(_uuid_from_obj_id(_record(sc.doc.Objects.AddBrep(brep)))))
     return ids, {"type": "Brep", "count": len(ids)}
 
 
@@ -355,10 +366,37 @@ def op_loft_sections(params, dry_run=False):
     curve_ids = []
     if keep_curves:
         for curve in curves:
-            curve_ids.append(str(_uuid_from_obj_id(sc.doc.Objects.AddCurve(curve))))
-    loft_id = str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(brep)))
+            curve_ids.append(str(_uuid_from_obj_id(_record(sc.doc.Objects.AddCurve(curve)))))
+    loft_id = str(_uuid_from_obj_id(_record(sc.doc.Objects.AddBrep(brep))))
     preview["curve_ids"] = curve_ids
     return [loft_id], preview
+
+
+def op_join(params, dry_run=False):
+    """缝合多个曲面/片体（把两舷与端面拼成整体，是形成封闭实体的关键）"""
+    breps = [_brep_of(text) for text in params["object_ids"]]
+    keep_input = bool(params.get("keep_input", False))
+    tol = sc.doc.ModelAbsoluteTolerance
+
+    joined = Rhino.Geometry.Brep.JoinBreps(breps, tol)
+    if not joined or len(joined) == 0:
+        raise ValueError("缝合失败：对象之间没有可连接的边（间隙可能大于容差）")
+
+    preview = {
+        "type": "Brep(Join)",
+        "count": len(joined),
+        "is_solid": joined[0].IsSolid if len(joined) == 1 else False,
+        "area": sum(b.GetArea() for b in joined),
+    }
+    if dry_run:
+        preview["dry_run"] = True
+        return [], preview
+
+    if not keep_input:
+        for text in params["object_ids"]:
+            sc.doc.Objects.Delete(_guid(text), True)
+    ids = [str(_uuid_from_obj_id(_record(sc.doc.Objects.AddBrep(b)))) for b in joined]
+    return ids, preview
 
 
 def op_loft(params, dry_run=False):
@@ -393,7 +431,7 @@ def op_loft(params, dry_run=False):
     if dry_run:
         preview["dry_run"] = True
         return [], preview
-    obj_id = sc.doc.Objects.AddBrep(brep)
+    obj_id = _record(sc.doc.Objects.AddBrep(brep))
     return [str(_uuid_from_obj_id(obj_id))], preview
 
 
@@ -413,11 +451,15 @@ def op_mirror(params, dry_run=False):
     if dry_run:
         return [], {"type": "Mirror", "count": len(params["object_ids"]), "copy": copy, "dry_run": True}
     for text in params["object_ids"]:
-        caused = Rhino.RhinoDoc.Transform(sc.doc.Objects.FindId(_guid(text)), xform, copy)
-        if caused is None:
+        guid = _guid(text)
+        if sc.doc.Objects.FindId(guid) is None:
+            raise LookupError(f"找不到对象：{text}")
+        # 正确 API 是 sc.doc.Objects.Transform，不是 RhinoDoc.Transform
+        # （真机踩到：AttributeError: type object 'RhinoDoc' has no attribute 'Transform'）
+        new_id = sc.doc.Objects.Transform(guid, xform, copy)
+        if new_id == Guid.Empty:
             raise ValueError(f"镜像失败：{text}")
-        new_id = caused if copy else _guid(text)
-        ids.append(str(_uuid_from_obj_id(new_id)))
+        ids.append(str(_uuid_from_obj_id(_record(new_id))))
     return ids, {"type": "Mirror", "count": len(ids), "copy": copy}
 
 
@@ -446,7 +488,7 @@ def op_split(params, dry_run=False):
         if not keep_input:
             sc.doc.Objects.Delete(_guid(text), True)
         for piece in pieces:
-            sc.doc.Objects.AddBrep(piece)
+            _record(sc.doc.Objects.AddBrep(piece))
     return [], {"type": "Split", "pieces": total, "keep_input": keep_input}
 
 
@@ -473,7 +515,7 @@ def op_offset_srf(params, dry_run=False):
     if dry_run:
         preview["dry_run"] = True
         return [], preview
-    ids = [str(_uuid_from_obj_id(sc.doc.Objects.AddBrep(b))) for b in results]
+    ids = [str(_uuid_from_obj_id(_record(sc.doc.Objects.AddBrep(b)))) for b in results]
     return ids, preview
 
 
@@ -513,6 +555,7 @@ _HANDLERS = {
     "query": op_query,
     "loft": op_loft,
     "loft_sections": op_loft_sections,
+    "join": op_join,
     "mirror": op_mirror,
     "split": op_split,
     "offset_srf": op_offset_srf,
@@ -530,7 +573,7 @@ def _execute(request):
     params = request["params"]
     bake = bool(request.get("bake", True))
 
-    # bake=false 时**不写入文档**（此前只影响 undo 分组，几何照样被 Add 进文档，属实现缺陷）
+    # bake=false 时**不写入文档**
     dry_run = (not bake) and operation != "delete"
 
     handler = _HANDLERS.get(operation)
@@ -538,61 +581,55 @@ def _execute(request):
         return {"request_id": rid, "state": "failed",
                 "error": _error("unknown_operation", f"不支持的操作：{operation}")}
 
-    undo = None
+    writing = bake and not dry_run and operation != "query"
+    undo_serial = None
+    result = None
+    _created_ids.clear()
     try:
-        writing = bake and not dry_run and operation != "query"
-        undo_serial = None
         if writing:
-            # BeginUndoRecord 返回 uint 序号，EndUndoRecord 必须把它传回去。
-            # 真机踩到：EndUndoRecord() 无参调用 -> "No overload takes 0 arguments"，
-            # 导致所有 bake=true 的写入全部失败。
+            # BeginUndoRecord 返回 uint 序号，EndUndoRecord 必须传回
             undo_serial = sc.doc.BeginUndoRecord(f"GrassSea: {operation}")
-            undo = True
         object_ids, preview = handler(params, dry_run)
-        if undo_serial is not None:
-            sc.doc.EndUndoRecord(undo_serial)
-        elif undo:
-            sc.doc.EndUndoRecord(0)
         if writing:
             sc.doc.Views.Redraw()
-        return {
+        result = {
             "request_id": rid, "state": "done", "ok": True,
             "object_ids": object_ids, "preview_info": preview, "error": None,
         }
+        return result
     except LookupError as exc:
-        if undo:
-            try:
-                sc.doc.Undo()
-            except Exception:  # noqa: BLE001
-                pass
-        return {"request_id": rid, "state": "failed",
-                "error": _error("not_found", str(exc))}
+        result = {"request_id": rid, "state": "failed",
+                  "error": _error("not_found", str(exc))}
     except ValueError as exc:
-        if undo:
-            try:
-                sc.doc.Undo()
-            except Exception:  # noqa: BLE001
-                pass
-        code = "geometry_failure" if "布尔" in str(exc) or "挤出" in str(exc) else "invalid_params"
-        return {"request_id": rid, "state": "failed", "error": _error(code, str(exc))}
+        code = "geometry_failure" if ("布尔" in str(exc) or "挤出" in str(exc)) else "invalid_params"
+        result = {"request_id": rid, "state": "failed", "error": _error(code, str(exc))}
     except RuntimeError as exc:
-        if undo:
-            try:
-                sc.doc.Undo()
-            except Exception:  # noqa: BLE001
-                pass
-        # Rhino API 版本差异：明确告知是桥接侧能力问题，不是用户几何有问题
-        return {"request_id": rid, "state": "failed",
-                "error": _error("internal", str(exc))}
+        # Rhino API 版本差异：明确是桥接能力问题，不是用户几何有问题
+        result = {"request_id": rid, "state": "failed", "error": _error("internal", str(exc))}
     except Exception as exc:  # noqa: BLE001
-        if undo:
+        result = {"request_id": rid, "state": "failed",
+                  "error": _error("internal", f"{type(exc).__name__}: {exc}")}
+    finally:
+        if undo_serial is not None:
             try:
-                sc.doc.Undo()
+                sc.doc.EndUndoRecord(undo_serial)
             except Exception:  # noqa: BLE001
                 pass
-        # 未知异常属于桥接自身问题，不要伪装成几何失败
-        return {"request_id": rid, "state": "failed",
-                "error": _error("internal", f"{type(exc).__name__}: {exc}")}
+        # 失败时只删除**本次请求**创建的对象。
+        # 绝不能调 doc.Undo()：若本记录为空，它会撤销上一次成功的几何（实测丢过船壳）。
+        if result is not None and result.get("state") != "done" and _created_ids:
+            for gid in list(_created_ids):
+                try:
+                    sc.doc.Objects.Delete(gid, True)
+                except Exception:  # noqa: BLE001
+                    pass
+            if writing:
+                try:
+                    sc.doc.Views.Redraw()
+                except Exception:  # noqa: BLE001
+                    pass
+        _created_ids.clear()
+    return result
 
 
 def _drain_queue():

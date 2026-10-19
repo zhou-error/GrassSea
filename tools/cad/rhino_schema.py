@@ -17,6 +17,7 @@ from typing import Any
 #: 首期允许的操作（与 rhino/bridge.py 的白名单保持一致，两处都要改）
 ALLOWED_OPERATIONS: frozenset[str] = frozenset({
     "loft_sections",   # 断面点表 -> 曲线 -> 放样（一次请求，避免逐条建曲线后无法接放样）
+    "join",            # 缝合多个曲面/片体成整体（形成封闭实体的关键一步）
     # --- 通用 ---
     "create_curve",
     "extrude",
@@ -408,6 +409,16 @@ def _validate_mass_properties(params: dict, factor: float) -> dict:
     return {"ok": True, "params": {"object_ids": ids}}
 
 
+def _validate_join(params: dict, factor: float) -> dict:
+    ids, err = _guid_list(params.get("object_ids"), "object_ids", 1, MAX_IDS)
+    if err:
+        return err
+    keep_input, err = _bool(params.get("keep_input"), "keep_input", False)
+    if err:
+        return err
+    return {"ok": True, "params": {"object_ids": ids, "keep_input": keep_input}}
+
+
 _VALIDATORS = {
     "create_curve": _validate_create_curve,
     "extrude": _validate_extrude,
@@ -420,6 +431,7 @@ _VALIDATORS = {
     "offset_srf": _validate_offset_srf,
     "mass_properties": _validate_mass_properties,
     "loft_sections": _validate_loft_sections,
+    "join": _validate_join,
 }
 
 

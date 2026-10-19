@@ -35,7 +35,7 @@ def _needs_confirm(operation: str, params: dict) -> bool:
     """
     if operation in DESTRUCTIVE_OPERATIONS:
         return True
-    if operation == "split" and not bool(params.get("keep_input", False)):
+    if operation in ("split", "join") and not bool(params.get("keep_input", False)):
         return True
     return False
 
@@ -49,6 +49,7 @@ RHINO_MANIFEST = ToolManifest(
         "船体建模：loft_sections（断面点表直连放样，船体首选）、loft（按已有曲线放样）、"
         "mirror（镜像到另一舷）、"
         "split（按平面切分甲板/艉封板）、offset_srf（偏移成壳/板厚）、"
+        "join（缝合曲面成整体，形成封闭实体的关键）、"
         "mass_properties（面积/体积/质心，用于核对排水量）。"
         "boolean 与 delete 属于破坏性操作，bake=true 时必须带 confirm=true。"
         "Rhino 未启动或桥接未运行时，会明确返回「桥接未连接」，不会伪造结果。"

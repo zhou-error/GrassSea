@@ -108,14 +108,21 @@ mass_properties
   params: { object_ids: [guid, ...] }
   说明：只读。体积只在对象是闭合实体时才有意义。
 
+join
+  用途：缝合多个曲面/片体成整体（把左舷 + 右舷 + 端面拼成封闭实体）。
+  params: { object_ids: [guid, ...], keep_input?: bool }
+  说明：keep_input=false 会删除原片体，属破坏性，需确认；
+        只有缝合且端面封住后，mass_properties 的体积才有意义。
+
 --- 船体建模推荐顺序 ---
 
-1. 用 create_curve 按型值表逐条建横剖面（或水线、纵剖线）
-2. loft 放样成船体曲面（断面方向必须一致）
+1. loft_sections 用断面点表直连放样（推荐；或用 create_curve × N 再 loft）
+2. 断面方向必须一致，首尾退化断面留 1 个非零半径
 3. mirror 镜像到另一舷（若只建了半船）
 4. split 切出甲板线 / 艉封板
-5. offset_srf 生成板厚壳体（如需结构）
-6. mass_properties 核对体积 → 与 hydrostatics 的排水量对照
+5. join 缝合两舷与端面 → 封闭实体（体积才有意义）
+6. offset_srf 生成板厚壳体（如需结构）
+7. mass_properties 核对体积 → 与 hydrostatics 的排水量对照
 """
 
 THREAD_SAFETY = """任何涉及 RhinoDoc 读写的操作都必须在 Rhino 主 UI 线程执行，

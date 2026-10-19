@@ -33,7 +33,7 @@ def test_operation_whitelist():
     assert ALLOWED_OPERATIONS == {
         "create_curve", "extrude", "boolean", "delete", "query",
         "loft", "mirror", "split", "offset_srf", "mass_properties",
-        "loft_sections",
+        "loft_sections", "join",
     }
 
 
@@ -287,6 +287,15 @@ def test_loft_sections_degenerate():
 
 def test_loft_sections_bad_point():
     bad("loft_sections", {"sections": [ELLIPSE_8, [[0, 0]] * 8]}, field="sections[1][0]")
+
+
+def test_join_ok():
+    p = ok("join", {"object_ids": [VALID_GUID, VALID_GUID_2]})
+    assert p["keep_input"] is False
+
+
+def test_join_empty():
+    bad("join", {"object_ids": []}, field="object_ids")
 
 
 def test_loft_sections_degree_out_of_range():
