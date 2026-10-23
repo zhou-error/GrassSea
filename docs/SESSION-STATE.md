@@ -31,7 +31,8 @@
 | 未实现（不下发） | **8** |
 | 可编辑配置项 | **30**（8 分类） |
 | Rhino 操作数 | **12** |
-| 契约测试 | **31**（`tests/contract/`，全量 116 通过） |
+| 契约测试 | **34**（`tests/contract/`，全量 119 通过） |
+| MCP 试点 | **已完成**（`rhino/mcp_server.py`，stdio，12 个工具） |
 
 **Agent 列表**：`pm_agent, review_agent, naval_arch_agent, cad_agent, rhino_agent, research_agent, doc_agent`
 
@@ -147,7 +148,7 @@ rhino_ops   12
 | 3 | 计算工具数值守卫（拒 nan/inf/负值/1e12） | 审计 S2-1 |
 | 4 | 提交前端锁文件 | 审计 S2-3 |
 | 5 | 路径前缀 `/etc/passwd` 静默重写、select 枚举未校验、默认值未标记 | 审计 S3-1/2/3 |
-| 6 | `pyproject` 服务器依赖切到 `[server]` 组（需重建镜像验证） | BACKLOG `1 |
+| 6 | `pyproject` 服务器依赖切到 `[server]` 组（需重建镜像验证） | BACKLOG §1 |
 | 7 | 上下文缺失时的**后端硬提示**（不只靠提示词） | BACKLOG `9 |
 | 8 | 附录索引重新生成（新代码文件未纳入） | BACKLOG `5 |
 
@@ -183,6 +184,11 @@ rhino_ops   12
 | `test_template_contract.py` | 浅合并丢页边距 |
 
 运行：`uv run pytest tests/contract -q`
+
+**MCP 试点（2026-10-23）**：`rhino/mcp_server.py` 以 stdio 暴露 12 个 `rhino_*` 工具，
+执行层复用 `RhinoBridgeTool`，因此 bake/confirm/诚实失败语义与主程序一致。
+关键约束：`stdout` 是协议通道，server 启动第一件事就是把 `sys.stdout` 指向 stderr；
+契约测试 `test_mcp_stdio_contract.py` 断言了「stdout 无日志污染」。
 
 ## 7. 恢复流程（新会话从这一步开始）
 

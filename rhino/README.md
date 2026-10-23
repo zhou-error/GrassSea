@@ -152,6 +152,42 @@ set GRASSEA_DATA_DIR=F:\GrassSea\data
 
 ---
 
+## 7.5 作为 MCP 服务暴露（stdio）
+
+同一套操作也可以被支持 MCP 的客户端直接调用：
+
+```bash
+uv run python rhino/mcp_server.py
+```
+
+客户端配置示例（stdio 传输，示例为通用 MCP 客户端格式）：
+
+```json
+{
+  "mcpServers": {
+    "grasssea-rhino": {
+      "command": "uv",
+      "args": ["run", "python", "<项目根>/rhino/mcp_server.py"],
+      "env": {
+        "RHINO_BRIDGE_ENABLED": "true",
+        "RHINO_BRIDGE_URL": "http://127.0.0.1:8765",
+        "RHINO_BRIDGE_TOKEN_FILE": "<script 打印的令牌路径>"
+      }
+    }
+  }
+}
+```
+
+暴露 **12 个工具**：`rhino_create_curve`、`rhino_extrude`、`rhino_loft_sections`、
+`rhino_loft`、`rhino_mirror`、`rhino_split`、`rhino_join`、`rhino_offset_srf`、
+`rhino_boolean`、`rhino_delete`、`rhino_query`、`rhino_mass_properties`。
+
+要点：
+- 执行层**复用** `tools/cad/rhino_bridge.py`，因此 bake 语义、破坏性操作 confirm、
+  诚实失败与主程序完全一致；
+- `stdout` 是协议通道，日志全部改道 `stderr`（server 启动时把 sys.stdout 指向 stderr）；
+- 每个工具额外接受 `bake` / `confirm` 两个参数。
+
 ## 8. 已知限制
 
 - 不支持 Grasshopper 组件操作
