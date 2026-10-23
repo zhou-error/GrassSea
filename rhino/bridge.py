@@ -345,11 +345,9 @@ def op_loft_sections(params, dry_run=False):
 
     brep = breps[0]
     if solid:
-        # 封盖容差不能太小：放样端环常有微小起伏，tol 过严会封不上。
-        # 封不上时 preview 里 is_solid=false，由上层如实告知，不假装是实体。
-        capped = brep.CapPlanarHoles(max(tol, 0.01))
-        if capped is not None:
-            brep = capped
+        # 真机发现：闭合断面放样出的是两端敞开的管子，CapPlanarHoles 找不到"平面孔"，
+        # 因此封不上（is_solid=false、volume=None）。改为用首尾断面各做一个平面盖再 join。
+        brep = _cap_with_sections(brep, curves, tol)
 
     preview = {
         "type": "Brep(Loft)",
@@ -401,6 +399,29 @@ def op_join(params, dry_run=False):
     return ids, preview
 
 
+def _cap_with_sections(brep, section_curves, tol):
+    """用首尾断面曲线做平面盖，与放样结果 join 成实体；失败则原样返回（is_solid=false）"""
+    if not section_curves:
+        return brep
+    caps = []
+    for curve in (section_curves[0], section_curves[-1]):
+        try:
+            planar = Rhino.Geometry.Brep.CreatePlanarBreps(curve, max(tol, 0.01))
+            if planar:
+                caps.extend(list(planar))
+        except Exception:  # noqa: BLE001
+            pass
+    if not caps:
+        return brep
+    try:
+        joined = Rhino.Geometry.Brep.JoinBreps([brep] + caps, max(tol, 0.01))
+        if joined and len(joined) == 1:
+            return joined[0]
+    except Exception:  # noqa: BLE001
+        pass
+    return brep
+
+
 def op_loft(params, dry_run=False):
     """把多条断面曲线放样成船体曲面/实体"""
     curves = [_curve_of(cid) for cid in params["curve_ids"]]
@@ -420,11 +441,8 @@ def op_loft(params, dry_run=False):
 
     brep = breps[0]
     if solid:
-        # 封盖容差不能太小：放样端环常有微小起伏，tol 过严会封不上。
-        # 封不上时 preview 里 is_solid=false，由上层如实告知，不假装是实体。
-        capped = brep.CapPlanarHoles(max(tol, 0.01))
-        if capped is not None:
-            brep = capped
+        # 同上：用已有断面曲线做端盖再 join
+        brep = _cap_with_sections(brep, [_curve_of(cid) for cid in params["curve_ids"]], tol)
 
     preview = {
         "type": "Brep(Loft)",
@@ -503,10 +521,17 @@ def op_split(params, dry_run=False):
     total = 0
     for text in params["object_ids"]:
         brep = _brep_of(text)
-        try:
-            pieces = brep.Split(plane, tol)
-        except Exception:  # noqa: BLE001
-            pieces = Rhino.Geometry.Brep.Split(brep, plane, tol)
+        # 真机报错：Brep.Split 的第二个参数必须是切割用 Brep，不能直接传 Plane。
+        # 所以先把平面变成一块足够大的平面曲面当刀具。
+        bbox = brep.GetBoundingBox(True)
+        size = max(bbox.Diagonal.Length, 1.0) * 3.0
+        cutter_srf = Rhino.Geometry.PlaneSurface(
+            plane, Rhino.Geometry.Interval(-size, size), Rhino.Geometry.Interval(-size, size)
+        )
+        cutter = cutter_srf.ToBrep()
+        if cutter is None:
+            raise RuntimeError("构建切割面失败")
+        pieces = Rhino.Geometry.Brep.Split(brep, cutter, tol)
         if not pieces or len(pieces) == 0:
             raise ValueError(
                 f"切割失败：{text} 与 {params.get('plane', 'xy')} 平面没有交点，"
@@ -529,20 +554,34 @@ def op_offset_srf(params, dry_run=False):
     solid = bool(params.get("solid", True))
     tol = sc.doc.ModelAbsoluteTolerance
 
-    # 正确 API 是 Brep.CreateOffsetBrep（真机实测 Brep.Offset / brep.Offset 都不存在）
+    # 真机发现 Brep.Offset / brep.Offset 都不存在；CreateOffsetBrep 的签名也需试探。
+    # 这里按可能的重载逐个尝试，全部失败时把每个变体的异常原样返回，便于下一步定位。
     results = None
     errors: list[str] = []
-    try:
-        results = Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, False, tol)
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"CreateOffsetBrep: {exc}")
-    if not results:
+    variants = [
+        ("CreateOffsetBrep(brep,d,solid,extend=0,tol)",
+         lambda: Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, False, tol)),
+        ("CreateOffsetBrep(brep,d,solid,extend=1,tol)",
+         lambda: Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, True, max(tol, 0.01))),
+        ("CreateOffsetBrep([brep],d,solid,extend=0,tol)",
+         lambda: Rhino.Geometry.Brep.CreateOffsetBrep([brep], distance, solid, False, tol)),
+        ("CreateOffsetBrep(brep,d,solid,extend=0,tol,ref)",
+         lambda: Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, False, tol, None, 0.0)),
+    ]
+    for label, fn in variants:
         try:
-            results = Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, True, max(tol, 0.01))
+            out = fn()
+            if out:
+                results = list(out) if not isinstance(out, Rhino.Geometry.Brep) else [out]
+                if results:
+                    errors.append(f"{label}: OK")
+                    break
+            else:
+                errors.append(f"{label}: 返回空")
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"CreateOffsetBrep(extend): {exc}")
+            errors.append(f"{label}: {type(exc).__name__}: {exc}")
     if not results:
-        raise RuntimeError("Rhino API 不可用：偏移失败（" + "; ".join(errors) + "）")
+        raise RuntimeError("偏移失败（已尝试全部已知签名）：" + " | ".join(errors))
 
     if not results or len(results) == 0:
         raise ValueError("偏移失败：曲面曲率过大或距离不当")
