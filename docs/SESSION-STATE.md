@@ -76,6 +76,8 @@ rhino_ops   12
 |---|---|
 | 新增函数插到 `@asynccontextmanager` 与 `lifespan` 之间，装饰器错位 → 启动 TypeError → uvicorn `sys.exit(3)` 拖垮 4 个服务 | `e9e2691f` |
 | `--check` 只做导入检查，不跑 lifespan；单服务启动失败会终止整个进程 | `3c3e5088`（加 lifespan 冒烟 + 拦截 SystemExit） |
+| **`app/launcher.py` 从未定义 logger**：看护协程与合并路径引用 `logger`，平时不触发，服务真挂/合并启动时 NameError 二次崩溃 | `本次`（补 stdlib logger，并把 3 处 structlog 风格调用改成 %-style） |
+| 合并形态用 Starlette `mount` 挂子应用，**lifespan 不会自动执行** → 注册表为空、`/agents` 返回 0，但 `/health` 照样 200 | `本次`（AsyncExitStack 手动进入四个子应用 lifespan） |
 
 ### 文档与工作区
 
@@ -152,6 +154,20 @@ rhino_ops   12
 **已明确暂缓**：OCR、教学文件逐章修正、pywebview 嵌入窗口（见 `docs/BACKLOG.md`）。
 
 ---
+
+## 6.4 运行形态（2026-10-23 变更）
+
+| 形态 | 启动 | 端口 |
+|---|---|---|
+| 桌面（默认） | `python -m app.launcher` / `--desktop` | **单端口 8001**，子服务挂 `/agent` `/knowledge` `/gateway` |
+| 桌面回滚 | 加 `--split` | 8001~8004 四端口（原行为） |
+| 服务器 | docker compose | 四服务四容器 |
+
+合并形态三个必须注意的点：
+1. **子应用 lifespan 要手动进入**（`AsyncExitStack` + `sub.router.lifespan_context`）；
+   否则注册表全空，而健康检查仍然返回 200 —— 最危险的那种「看起来正常」。
+2. **对话应用必须最后挂到 `/`**，它的 SPA 兜底路由会吞掉所有前缀。
+3. **端口自检只查对话端口**（`preflight.run_all(["chat_service"])`）。
 
 ## 6.5 端口层与契约测试（2026-10-23 新增）
 

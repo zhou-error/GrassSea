@@ -41,7 +41,7 @@
 | 外部中间件 | **零** | PostgreSQL · MongoDB · Redis · RabbitMQ · Milvus · MinIO |
 | 向量后端 | `local`（内置 SQLite + numpy） | `milvus` |
 | 数据 | `<项目根>/data/` | `./docker-data/` |
-| 窗口 | 无边框桌面窗口 | nginx 托管 |
+| 进程模型 | **单端口单应用**（四服务合并挂载） | 四服务四端口 |
 
 ### 桌面形态（推荐）
 
@@ -49,6 +49,9 @@
 uv sync --extra dev
 uv run python -m app.launcher --desktop
 ```
+
+桌面形态默认**合并为单端口**（8001），子服务挂在 /agent /knowledge /gateway；
+排障或回滚可加 --split 恢复四端口分体启动。
 
 Windows 下也可直接双击 `启动.bat`。
 

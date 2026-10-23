@@ -158,18 +158,23 @@ def resolve_port(service: str) -> int:
     return port if 1 <= port <= 65535 else default
 
 
-def check_ports() -> dict:
-    """检查全部服务端口是否空闲"""
+def check_ports(services: list[str] | None = None) -> dict:
+    """检查服务端口是否空闲
+
+    services 为空时检查全部四个端口；合并形态只需检查对话端口，
+    否则 8002~8004 被别的程序占用会误报启动失败。
+    """
     result = {"name": "ports", "ok": True, "blocking": False, "detail": "", "hints": []}
+    targets = services or list(DEFAULT_PORTS)
     busy: list[str] = []
-    for service in DEFAULT_PORTS:
+    for service in targets:
         port = resolve_port(service)
         if not _port_free(port):
             busy.append(f"{service}:{port}")
 
     if not busy:
         result["detail"] = "端口全部空闲：" + "、".join(
-            str(resolve_port(s)) for s in DEFAULT_PORTS
+            str(resolve_port(s)) for s in targets
         )
         return result
 
@@ -189,9 +194,12 @@ def check_ports() -> dict:
 
 # ---------------------------------------------------------------- 汇总
 
-def run_all() -> dict:
-    """执行全部检查，返回结构化结果"""
-    checks = [check_secrets(), check_data_dir(), check_ports()]
+def run_all(services: list[str] | None = None) -> dict:
+    """执行全部检查，返回结构化结果
+
+    services 传给端口检查：合并形态只需 ["chat_service"]。
+    """
+    checks = [check_secrets(), check_data_dir(), check_ports(services)]
     blocking = [c for c in checks if c.get("blocking")]
     warnings = [c for c in checks if not c.get("ok") and not c.get("blocking")]
     return {

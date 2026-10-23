@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib
+import logging
 import os
 import signal
 import sys
@@ -36,6 +37,11 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# 启动器运行在各服务 setup_logging 之前，用标准库 logger 最安全。
+# 注意：这里曾经**没有**定义 logger，而看护协程与合并形态都在用 —— 平时不触发，
+# 一旦服务真的挂掉就会 NameError 二次崩溃（实测在合并形态启动时暴露）。
+logger = logging.getLogger("grasssea.launcher")
 
 # (名称, ASGI 应用路径, 端口环境变量, 默认端口)
 SERVICES: tuple[tuple[str, str, str, int], ...] = (
@@ -50,6 +56,14 @@ INTERNAL_URLS: dict[str, str] = {
     "MODEL_GATEWAY_URL": "model_gateway",
     "AGENT_SERVICE_URL": "agent_service",
     "KNOWLEDGE_SERVICE_URL": "knowledge_service",
+}
+
+# 合并模式（桌面形态）下各服务挂载的路径前缀。
+# 对话服务挂在根路径（它要托管前端静态资源与 SPA 兜底路由），必须最后挂载。
+MERGED_PREFIX: dict[str, str] = {
+    "model_gateway": "/gateway",
+    "knowledge_service": "/knowledge",
+    "agent_service": "/agent",
 }
 
 # 服务名 -> (端口环境变量, 默认端口)
@@ -70,8 +84,12 @@ def resolve_port(env_key: str, default: int) -> int:
     return port if 1 <= port <= 65535 else default
 
 
-def prepare_environment() -> dict[str, Any]:
+def prepare_environment(merged: bool = False) -> dict[str, Any]:
     """在任何服务模块被导入之前准备运行环境
+
+    merged=True 时（桌面形态）四个服务合并到**同一个端口**，
+    因此服务间地址必须带上挂载前缀，并**强制覆盖**（不能 setdefault，
+    否则 .env 里的旧地址会赢）。分体形态（Docker）保持原行为。
 
     返回一份便于打印/自检的配置摘要。
     """
@@ -81,9 +99,15 @@ def prepare_environment() -> dict[str, Any]:
 
     # 注意：必须用 resolve_port 解析，否则上层若覆盖了端口，
     # 服务间地址仍指向默认端口，本机形态会连不上。
-    for var, service_name in INTERNAL_URLS.items():
-        env_key, default_port = PORT_BY_NAME[service_name]
-        os.environ.setdefault(var, f"http://127.0.0.1:{resolve_port(env_key, default_port)}")
+    if merged:
+        chat_env, chat_default = PORT_BY_NAME["chat_service"]
+        base = f"http://127.0.0.1:{resolve_port(chat_env, chat_default)}"
+        for var, service_name in INTERNAL_URLS.items():
+            os.environ[var] = f"{base}{MERGED_PREFIX[service_name]}"
+    else:
+        for var, service_name in INTERNAL_URLS.items():
+            env_key, default_port = PORT_BY_NAME[service_name]
+            os.environ.setdefault(var, f"http://127.0.0.1:{resolve_port(env_key, default_port)}")
 
     # 桌面/本机形态默认使用零依赖的向量后端与项目内数据目录；
     # 显式设置的环境变量优先（例如连本机 Milvus 时设 VECTOR_BACKEND=milvus）。
@@ -146,16 +170,141 @@ async def serve(
         raise RuntimeError(reason) from None
 
 
-async def run(verbose: bool = False, force: bool = False) -> int:
-    info = prepare_environment()
+def build_merged_app() -> Any:
+    """把四个 ASGI 应用挂到一个 FastAPI 上（桌面形态）
+
+    注意挂载顺序：对话服务必须**最后**挂到 "/"，因为它的 SPA 兜底路由
+    会吞掉所有未匹配路径；先挂它会让 /agent、/knowledge、/gateway 全部 404。
+    """
+    from contextlib import AsyncExitStack, asynccontextmanager
+
+    from fastapi import FastAPI
+
+    # 关键：Starlette 的 mount() **不会**调用子应用的 lifespan。
+    # 若不手动进入，agent_service 的注册表/工具/意图分类器全都不会初始化，
+    # 表现为 /agent/health 正常但 /agents 返回 0（实测踩到）。
+    # 这里按 SERVICES 顺序（gateway -> knowledge -> agent -> chat）进入，
+    # 退出时逆序关闭。
+    sub_apps: list[tuple[str, Any]] = []
+    for name, path, _env_key, _default_port in SERVICES:
+        module_path, attr = path.split(":")
+        sub_apps.append((name, getattr(importlib.import_module(module_path), attr)))
+
+    @asynccontextmanager
+    async def merged_lifespan(_app: Any):
+        async with AsyncExitStack() as stack:
+            for name, sub in sub_apps:
+                await stack.enter_async_context(sub.router.lifespan_context(sub))
+                logger.info("合并形态：子应用 lifespan 已进入：%s", name)
+            yield
+
+    root = FastAPI(
+        title="GrassSea (merged)",
+        docs_url=None,
+        openapi_url=None,
+        redoc_url=None,
+        lifespan=merged_lifespan,
+    )
+
+    for name, sub_app in sub_apps:
+        if name == "chat_service":
+            continue
+        root.mount(MERGED_PREFIX[name], sub_app)
+
+    # 对话服务最后挂到 "/"：它有 SPA 兜底路由，先挂会吞掉上面所有前缀
+    for name, sub_app in sub_apps:
+        if name == "chat_service":
+            root.mount("/", sub_app)
+    return root
+
+
+async def _run_merged(info: dict[str, Any], verbose: bool = False) -> int:
+    """桌面形态：单端口单应用，替代原来的四个 uvicorn"""
+    import uvicorn
+
+    chat_env, chat_default = PORT_BY_NAME["chat_service"]
+    port = resolve_port(chat_env, chat_default)
+
+    app = build_merged_app()
+
+    print("\n".join([
+        "",
+        "=" * 68,
+        "  白草沧智 GrassSea AI — 单进程合并形态（桌面）",
+        "=" * 68,
+        f"  向量后端 : {info['VECTOR_BACKEND']}",
+        f"  数据目录 : {info['DATA_DIR']}",
+        "-" * 68,
+        f"  对话入口 : http://127.0.0.1:{port}",
+        f"  编排服务 : http://127.0.0.1:{port}/agent",
+        f"  知识服务 : http://127.0.0.1:{port}/knowledge",
+        f"  模型网关 : http://127.0.0.1:{port}/gateway",
+        "  按 Ctrl+C 停止",
+        "=" * 68,
+        "",
+    ]), flush=True)
+
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="info" if verbose else "warning",
+        access_log=False,
+        lifespan="on",
+    )
+    server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+
+    stop = asyncio.Event()
+
+    def _request_stop(*_: Any) -> None:
+        stop.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, _request_stop)
+        except (ValueError, OSError):
+            pass
+
+    task = asyncio.create_task(server.serve(), name="merged")
+    started = time.time()
+    try:
+        # 合并形态只有一个进程：它退出就等于整体退出，无需看护多个服务
+        while not stop.is_set():
+            if task.done():
+                exc = None if task.cancelled() else task.exception()
+                reason = f"{type(exc).__name__}: {exc}" if exc else "已退出"
+                print(f"\n[错误] 服务已退出：{reason}\n", flush=True)
+                logger.error("合并形态服务退出：%s", reason)
+                return 3
+            await asyncio.sleep(0.5)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("\n正在停止服务…", flush=True)
+        server.should_exit = True
+        try:
+            await asyncio.wait_for(task, timeout=10)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            task.cancel()
+        print(f"已停止（运行 {time.time() - started:.1f} 秒）", flush=True)
+    return 0
+
+
+async def run(verbose: bool = False, force: bool = False, merged: bool = True) -> int:
+    info = prepare_environment(merged=merged)
 
     # ---- 启动自检（P0）：失败即中止，不带病启动 ----
     from app.preflight import format_report, run_all
 
-    report = run_all()
+    # 合并形态只监听对话端口，检查全部四个会误报
+    report = run_all(["chat_service"] if merged else None)
     print(format_report(report), flush=True)
     if not report["ok"] and not force:
         return 2
+
+    if merged:
+        return await _run_merged(info, verbose=verbose)
 
     apps = import_apps()
 
@@ -217,7 +366,7 @@ async def run(verbose: bool = False, force: bool = False) -> int:
                 else:
                     exc = task.exception()
                     failed[name] = f"{type(exc).__name__}: {exc}" if exc else "已退出"
-                logger.error("服务意外退出", service=name, reason=failed[name])
+                logger.error("服务意外退出：%s（%s）", name, failed[name])
                 print(
                     f"\n[警告] 服务 {name} 意外退出：{failed[name]}"
                     f"（其余服务仍在运行；详细日志见 data/logs/app.log）\n",
@@ -312,6 +461,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="只做导入与配置自检，不启动服务")
     parser.add_argument("--verbose", action="store_true", help="输出更详细的日志")
     parser.add_argument("--force", action="store_true", help="忽略启动自检失败，强制启动")
+    parser.add_argument(
+        "--split",
+        action="store_true",
+        help="桌面形态下改为四端口分体启动（默认合并为单端口；用于回滚与排障）",
+    )
     parser.add_argument("--desktop", action="store_true", help="启动服务并打开桌面窗口")
     parser.add_argument(
         "--no-window",
@@ -337,10 +491,12 @@ def main(argv: list[str] | None = None) -> int:
             forwarded.append("--verbose")
         if args.no_window:
             forwarded.append("--no-window")
+        if args.split:
+            forwarded.append("--split")
         return desktop_main(forwarded)
 
     try:
-        return asyncio.run(run(verbose=args.verbose, force=args.force))
+        return asyncio.run(run(verbose=args.verbose, force=args.force, merged=not args.split))
     except KeyboardInterrupt:
         return 0
 
