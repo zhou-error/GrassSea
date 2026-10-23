@@ -26,12 +26,24 @@ class ResistanceTool(BaseTool):
 
     async def execute(self, params: dict, context: dict) -> dict:
         """按 ITTC-1957 摩擦阻力系数估算总阻力与有效功率"""
-        L = float(params.get("L", params.get("length", 100.0)))       # 船长 (m)
-        B = float(params.get("B", params.get("beam", 15.0)))          # 型宽 (m)
-        T = float(params.get("T", params.get("draft", 5.0)))          # 吃水 (m)
-        V = float(params.get("V_kn", params.get("speed_kn", 14.0)))   # 航速 (kn)
-        Cb = float(params.get("Cb", params.get("cb", 0.75)))          # 方型系数
-        rho = float(params.get("water_density", 1025))                # 水密度 (kg/m³)
+        from shared.utils.numeric import ParamError, get_phys, used_defaults_note
+
+        used: list[str] = []
+        try:
+            L, d = get_phys(params, ("L", "length"), 100.0, label="船长 L", key="length_m")
+            used += ["L"] if d else []
+            B, d = get_phys(params, ("B", "beam"), 15.0, label="型宽 B", key="beam_m")
+            used += ["B"] if d else []
+            T, d = get_phys(params, ("T", "draft"), 5.0, label="吃水 T", key="draft_m")
+            used += ["T"] if d else []
+            V, d = get_phys(params, ("V_kn", "speed_kn"), 14.0, label="航速 V", key="speed_kn")
+            used += ["V_kn"] if d else []
+            Cb, d = get_phys(params, ("Cb", "cb"), 0.75, label="方形系数 Cb", key="cb")
+            used += ["Cb"] if d else []
+            rho, d = get_phys(params, ("water_density",), 1025.0, label="水密度", key="rho")
+            used += ["water_density"] if d else []
+        except ParamError as exc:
+            return {"status": "error", "message": str(exc)}
 
         Vs = V * 0.5144                       # 航速 (m/s)
         Rn = Vs * L / 1.19e-6                 # 雷诺数
@@ -41,7 +53,7 @@ class ResistanceTool(BaseTool):
         Rt = Rf * 1.35                        # 计入剩余阻力的总阻力估算 (kN)
         Pe = Rt * Vs                          # 有效功率 (kW)
 
-        return {
+        result = {
             "status": "completed",
             "inputs": {"L": L, "B": B, "T": T, "V_kn": V, "Cb": Cb, "water_density": rho},
             "results": {
@@ -55,3 +67,5 @@ class ResistanceTool(BaseTool):
                 "effective_power_kW": round(Pe, 1),
             },
         }
+        result.update(used_defaults_note(used))
+        return result

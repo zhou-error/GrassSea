@@ -26,18 +26,32 @@ class StabilityTool(BaseTool):
 
     async def execute(self, params: dict, context: dict) -> dict:
         """计算初稳性高度、横摇周期并按 IMO 初稳性要求判定"""
-        B = float(params.get("B", params.get("beam", 15.0)))          # 型宽 (m)
-        D = float(params.get("D", params.get("depth", 8.0)))          # 型深 (m)
-        T = float(params.get("T", params.get("draft", 5.0)))          # 吃水 (m)
-        Cb = float(params.get("Cb", params.get("cb", 0.75)))          # 方型系数
+        from shared.utils.numeric import ParamError, get_number, get_phys, used_defaults_note
 
-        # 稳心高度 KM — 与 NavalArchAgent._stability_calculation 一致
-        km_estimate = B * B / (12 * T) * (1 + Cb / 2)
-        KM = float(params.get("KM", km_estimate))
-        # 重心高度估计 KG — 与 NavalArchAgent 一致
-        KG = float(params.get("KG", params.get("kg", 0.55 * D)))
-        # 初稳性高度：显式给出 GM 时以输入为准，否则由 KM - KG 推得
-        GM = float(params.get("GM", params.get("gm", KM - KG)))
+        used: list[str] = []
+        try:
+            B, d = get_phys(params, ("B", "beam"), 15.0, label="型宽 B", key="beam_m")
+            used += ["B"] if d else []
+            D, d = get_phys(params, ("D", "depth"), 8.0, label="型深 D", key="depth_m")
+            used += ["D"] if d else []
+            T, d = get_phys(params, ("T", "draft"), 5.0, label="吃水 T", key="draft_m")
+            used += ["T"] if d else []
+            Cb, d = get_phys(params, ("Cb", "cb"), 0.75, label="方形系数 Cb", key="cb")
+            used += ["Cb"] if d else []
+
+            # 稳心高度 KM — 与 NavalArchAgent._stability_calculation 一致
+            km_estimate = B * B / (12 * T) * (1 + Cb / 2)
+            KM, d = get_number(params, ("KM",), km_estimate, label="稳心高度 KM", minimum=0.01)
+            used += ["KM"] if d else []
+            # 重心高度估计 KG — 与 NavalArchAgent 一致
+            KG, d = get_number(params, ("KG", "kg"), 0.55 * D, label="重心高度 KG", minimum=0.0, allow_zero=True)
+            used += ["KG"] if d else []
+            # 初稳性高度：显式给出 GM 时以输入为准，否则由 KM - KG 推得。
+            # GM 允许为负（表示不稳，是真实物理状态），只要有限即可。
+            GM, d = get_number(params, ("GM", "gm"), KM - KG, label="初稳性高 GM", minimum=-10.0, allow_zero=True)
+            used += ["GM"] if d else []
+        except ParamError as exc:
+            return {"status": "error", "message": str(exc)}
 
         # 横摇周期 — 与 NavalArchAgent 一致（C 为经验系数）
         C = 0.38
@@ -48,7 +62,7 @@ class StabilityTool(BaseTool):
             {"name": "横摇周期", "requirement": "建议 <= 25s", "value": round(roll_period, 1), "pass": roll_period <= 25},
         ]
 
-        return {
+        result = {
             "status": "completed",
             "inputs": {"B": B, "D": D, "T": T, "Cb": Cb, "KM": KM, "KG": KG, "GM": GM},
             "results": {
@@ -62,3 +76,5 @@ class StabilityTool(BaseTool):
                 "warnings": [] if GM > 0.35 else ["GM 偏小，建议增大船宽或降低重心"],
             },
         }
+        result.update(used_defaults_note(used))
+        return result

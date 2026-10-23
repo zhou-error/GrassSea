@@ -25,17 +25,35 @@ class HullTransformTool(BaseTool):
 
     async def execute(self, params: dict, context: dict) -> dict:
         """按主尺度缩比生成新船参数并核验排水量缩放关系"""
-        parent_L = float(params.get("parent_L", params.get("L", 100.0)))
-        target_L = float(params.get("target_L", 120.0))
-        method = str(params.get("method", "length_scale"))
-        if parent_L <= 0 or target_L <= 0:
-            return {"status": "error", "message": "parent_L 与 target_L 必须为正数"}
+        from shared.utils.numeric import ParamError, get_phys, used_defaults_note
 
-        parent_B = float(params.get("parent_B", params.get("B", 15.0)))
-        parent_D = float(params.get("parent_D", params.get("D", 8.0)))
-        parent_T = float(params.get("parent_T", params.get("T", 5.0)))
-        Cb = float(params.get("Cb", params.get("cb", 0.75)))
-        rho = float(params.get("water_density", 1025))
+        ALLOWED_METHODS = ("length_scale",)
+        method = str(params.get("method", "length_scale") or "length_scale")
+        if method not in ALLOWED_METHODS:
+            # 审计 S3-2 同类问题：枚举值不校验会被静默接受
+            return {
+                "status": "error",
+                "message": f"method 只支持 {'/'.join(ALLOWED_METHODS)}，收到 {method!r}",
+            }
+
+        used: list[str] = []
+        try:
+            parent_L, d = get_phys(params, ("parent_L", "L"), 100.0, label="母型船长 parent_L", key="length_m")
+            used += ["parent_L"] if d else []
+            target_L, d = get_phys(params, ("target_L",), 120.0, label="目标船长 target_L", key="length_m")
+            used += ["target_L"] if d else []
+            parent_B, d = get_phys(params, ("parent_B", "B"), 15.0, label="母型型宽 parent_B", key="beam_m")
+            used += ["parent_B"] if d else []
+            parent_D, d = get_phys(params, ("parent_D", "D"), 8.0, label="母型型深 parent_D", key="depth_m")
+            used += ["parent_D"] if d else []
+            parent_T, d = get_phys(params, ("parent_T", "T"), 5.0, label="母型吃水 parent_T", key="draft_m")
+            used += ["parent_T"] if d else []
+            Cb, d = get_phys(params, ("Cb", "cb"), 0.75, label="方形系数 Cb", key="cb")
+            used += ["Cb"] if d else []
+            rho, d = get_phys(params, ("water_density",), 1025.0, label="水密度", key="rho")
+            used += ["water_density"] if d else []
+        except ParamError as exc:
+            return {"status": "error", "message": str(exc)}
 
         ratio = target_L / parent_L
         new_parameters = {
@@ -57,7 +75,7 @@ class HullTransformTool(BaseTool):
         if ratio < 0.8:
             warnings.append("缩放比小于 0.8，建议复核型线与总布置")
 
-        return {
+        result = {
             "status": "completed",
             "inputs": {
                 "parent_L": parent_L, "parent_B": parent_B, "parent_D": parent_D,
@@ -75,3 +93,5 @@ class HullTransformTool(BaseTool):
                 "warnings": warnings,
             },
         }
+        result.update(used_defaults_note(used))
+        return result

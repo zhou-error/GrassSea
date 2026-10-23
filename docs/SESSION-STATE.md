@@ -31,7 +31,7 @@
 | 未实现（不下发） | **8** |
 | 可编辑配置项 | **30**（8 分类） |
 | Rhino 操作数 | **12** |
-| 契约测试 | **34**（`tests/contract/`，全量 119 通过） |
+| 契约测试 | **54**（`tests/contract/`，全量 139 通过） |
 | MCP 试点 | **已完成**（`rhino/mcp_server.py`，stdio，12 个工具） |
 
 **Agent 列表**：`pm_agent, review_agent, naval_arch_agent, cad_agent, rhino_agent, research_agent, doc_agent`
@@ -145,9 +145,9 @@ rhino_ops   12
 |---|---|---|
 | 1 | Rhino 5 个操作的真机验证（loft_sections / join / split / offset_srf / mass_properties 体积） | 本文 `5 |
 | ~~2~~ | ~~让 pytest 可跑~~ ✅ 已完成（2026-10-23，pytest 9.1.1 + pytest-asyncio 1.4.0，116 用例通过） | 审计 S2-2 已关闭 |
-| 3 | 计算工具数值守卫（拒 nan/inf/负值/1e12） | 审计 S2-1 |
+| ~~3~~ | ~~计算工具数值守卫~~ ✅ 已完成（`shared/utils/numeric.py`，四个计算工具全部接入；同时标注默认值） | 审计 S2-1 / S3-3 已关闭 |
 | 4 | 提交前端锁文件 | 审计 S2-3 |
-| 5 | 路径前缀 `/etc/passwd` 静默重写、select 枚举未校验、默认值未标记 | 审计 S3-1/2/3 |
+| ~~5~~ | ~~绝对路径静默重写 / select 枚举未校验~~ ✅ 已完成（绝对路径拒绝、枚举在 update 入口拦截） | 审计 S3-1/2 已关闭 |
 | 6 | `pyproject` 服务器依赖切到 `[server]` 组（需重建镜像验证） | BACKLOG §1 |
 | 7 | 上下文缺失时的**后端硬提示**（不只靠提示词） | BACKLOG `9 |
 | 8 | 附录索引重新生成（新代码文件未纳入） | BACKLOG `5 |

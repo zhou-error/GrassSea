@@ -38,7 +38,24 @@ def output_root() -> Path:
 
 def resolve_output(rel_path: str) -> Path:
     """解析输出路径并确保不越出输出根目录"""
-    rel = (rel_path or "").strip().replace("\\", "/").lstrip("/")
+    raw = (rel_path or "").strip()
+
+    # 审计 S3-1：绝对路径必须拒绝，而不是静默 lstrip 后写到别处。
+    # 之前 resolve_output("/etc/passwd") 会被改写成 <outputs>/etc/passwd 并"成功"，
+    # 用户以为写到了 /etc，实际落在数据目录 —— 静默行为差异。
+    from pathlib import Path as _Path
+
+    # 注意：Windows 上 Path("/etc/passwd").is_absolute() 返回 False，
+    # 单看 is_absolute 会漏掉「以斜杠开头」这类 POSIX 风格路径（合同测试抓到过）。
+    looks_absolute = (
+        _Path(raw).is_absolute()
+        or raw.startswith(("/", "\\"))
+        or (len(raw) > 1 and raw[1] == ":")
+    )
+    if looks_absolute:
+        raise DocPathError(f"必须是相对路径，收到绝对路径：{rel_path}")
+
+    rel = raw.replace("\\", "/").lstrip("/")
     if not rel:
         raise DocPathError("必须提供相对路径（含文件名）")
     root = output_root().resolve()

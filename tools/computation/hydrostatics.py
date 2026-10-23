@@ -24,11 +24,22 @@ class HydrostaticsTool(BaseTool):
 
     async def execute(self, params: dict, context: dict) -> dict:
         """按经验公式计算静水力参数"""
-        L = float(params.get("L", params.get("length", 100.0)))       # 船长 (m)
-        B = float(params.get("B", params.get("beam", 15.0)))          # 型宽 (m)
-        T = float(params.get("T", params.get("draft", 5.0)))          # 吃水 (m)
-        Cb = float(params.get("Cb", params.get("cb", 0.75)))          # 方型系数
-        rho = float(params.get("water_density", 1025))                # 水密度 (kg/m³)
+        from shared.utils.numeric import ParamError, get_number, get_phys, used_defaults_note
+
+        used: list[str] = []
+        try:
+            L, d = get_phys(params, ("L", "length"), 100.0, label="船长 L", key="length_m")
+            used += ["L"] if d else []
+            B, d = get_phys(params, ("B", "beam"), 15.0, label="型宽 B", key="beam_m")
+            used += ["B"] if d else []
+            T, d = get_phys(params, ("T", "draft"), 5.0, label="吃水 T", key="draft_m")
+            used += ["T"] if d else []
+            Cb, d = get_phys(params, ("Cb", "cb"), 0.75, label="方形系数 Cb", key="cb")
+            used += ["Cb"] if d else []
+            rho, d = get_phys(params, ("water_density",), 1025.0, label="水密度", key="rho")
+            used += ["water_density"] if d else []
+        except ParamError as exc:
+            return {"status": "error", "message": str(exc)}
 
         # 排水量 (t) — 与 NavalArchAgent._stability_calculation 一致
         displacement = L * B * T * Cb * rho / 1000
@@ -41,7 +52,7 @@ class HydrostaticsTool(BaseTool):
         # 湿表面积 (m²) — 与 NavalArchAgent._resistance_calculation 一致
         wetted_surface = L * (2 * T + B) * (Cb ** 0.5)
 
-        return {
+        result = {
             "status": "completed",
             "inputs": {"L": L, "B": B, "T": T, "Cb": Cb, "water_density": rho},
             "results": {
@@ -56,3 +67,5 @@ class HydrostaticsTool(BaseTool):
                 "method": "经验公式估算（与 NavalArchAgent 静水力估算同一套公式）",
             },
         }
+        result.update(used_defaults_note(used))
+        return result

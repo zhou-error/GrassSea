@@ -322,6 +322,14 @@ async def update_config(request: ConfigUpdateRequest, background_tasks: Backgrou
     if not item:
         raise HTTPException(status_code=400, detail=f"未知配置项: {request.key}")
 
+    # 审计 S3-2：select 型必须先校验枚举，否则非法值会静默进入运行时
+    options = item.get("options")
+    if item.get("type") == "select" and options and request.value not in options:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{item['label']} 只支持 {'/'.join(options)}，收到 {request.value!r}",
+        )
+
     # 如果传的是脱敏值且没变，跳过更新
     if item.get("sensitive") and request.value.count("*") > 4:
         raise HTTPException(status_code=400, detail="请勿提交脱敏后的值，请重新输入完整 Key")
