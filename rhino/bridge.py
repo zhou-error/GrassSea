@@ -345,7 +345,9 @@ def op_loft_sections(params, dry_run=False):
 
     brep = breps[0]
     if solid:
-        capped = brep.CapPlanarHoles(tol)
+        # 封盖容差不能太小：放样端环常有微小起伏，tol 过严会封不上。
+        # 封不上时 preview 里 is_solid=false，由上层如实告知，不假装是实体。
+        capped = brep.CapPlanarHoles(max(tol, 0.01))
         if capped is not None:
             brep = capped
 
@@ -418,7 +420,9 @@ def op_loft(params, dry_run=False):
 
     brep = breps[0]
     if solid:
-        capped = brep.CapPlanarHoles(tol)
+        # 封盖容差不能太小：放样端环常有微小起伏，tol 过严会封不上。
+        # 封不上时 preview 里 is_solid=false，由上层如实告知，不假装是实体。
+        capped = brep.CapPlanarHoles(max(tol, 0.01))
         if capped is not None:
             brep = capped
 
@@ -472,10 +476,16 @@ def op_mirror(params, dry_run=False):
         if dup is None:
             raise ValueError(f"无法复制几何：{text}")
         dup.Transform(xform)
-        attrs = obj.Attributes.Duplicate() if obj.Attributes else None
-        new_id = sc.doc.Objects.Add(dup, attrs) if attrs is not None else sc.doc.Objects.Add(dup)
+        # 不传 ObjectAttributes：真机实测 Add(dup, attrs) 会返回原对象 id（复制未生效）。
+        # 传默认属性才能确保得到全新对象。
+        new_id = sc.doc.Objects.Add(dup)
         if new_id == Guid.Empty:
             raise ValueError(f"镜像后新增对象失败：{text}")
+        # 自检：新对象 id 必须与原对象不同，否则说明复制没生效
+        if str(new_id).lower() == str(guid).lower():
+            raise RuntimeError(
+                "镜像未生成新对象（返回的 id 与原对象相同）；请重启 Rhino 并重新运行 rhino/bridge.py"
+            )
         ids.append(str(_uuid_from_obj_id(_record(new_id))))
     return ids, {"type": "Mirror", "count": len(ids), "copy": copy}
 
@@ -498,7 +508,10 @@ def op_split(params, dry_run=False):
         except Exception:  # noqa: BLE001
             pieces = Rhino.Geometry.Brep.Split(brep, plane, tol)
         if not pieces or len(pieces) == 0:
-            raise ValueError(f"切割失败：{text} 与该平面没有交点")
+            raise ValueError(
+                f"切割失败：{text} 与 {params.get('plane', 'xy')} 平面没有交点，"
+                "或该对象是开放曲面无法切分"
+            )
         total += len(pieces)
         if dry_run:
             continue
@@ -516,14 +529,20 @@ def op_offset_srf(params, dry_run=False):
     solid = bool(params.get("solid", True))
     tol = sc.doc.ModelAbsoluteTolerance
 
+    # 正确 API 是 Brep.CreateOffsetBrep（真机实测 Brep.Offset / brep.Offset 都不存在）
     results = None
+    errors: list[str] = []
     try:
-        results = Rhino.Geometry.Brep.Offset([brep], distance, solid, False, tol)
-    except Exception:  # noqa: BLE001
+        results = Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, False, tol)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"CreateOffsetBrep: {exc}")
+    if not results:
         try:
-            results = brep.Offset(distance, tol)
+            results = Rhino.Geometry.Brep.CreateOffsetBrep(brep, distance, solid, True, max(tol, 0.01))
         except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"Rhino API 不可用：Brep.Offset 全部重载失败（{exc}）") from exc
+            errors.append(f"CreateOffsetBrep(extend): {exc}")
+    if not results:
+        raise RuntimeError("Rhino API 不可用：偏移失败（" + "; ".join(errors) + "）")
 
     if not results or len(results) == 0:
         raise ValueError("偏移失败：曲面曲率过大或距离不当")
