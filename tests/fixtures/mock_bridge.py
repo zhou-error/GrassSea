@@ -14,7 +14,17 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ALLOWED = {"create_curve", "extrude", "boolean", "delete", "query"}
+#: 与真实实现共用同一份白名单，避免 mock 与代码漂移
+#: （曾出现：mock 只认 5 个旧操作，新增的 loft_sections 被判 unknown_operation）
+try:  # pragma: no cover - 仅在项目内可用
+    from tools.cad.rhino_schema import ALLOWED_OPERATIONS as ALLOWED  # type: ignore
+except Exception:  # noqa: BLE001  # 独立运行时退化为字面量
+    ALLOWED = {
+        "create_curve", "extrude", "boolean", "delete", "query",
+        "loft", "loft_sections", "mirror", "split", "offset_srf",
+        "mass_properties", "join",
+    }
+
 TOKEN = "test-token"
 
 
@@ -143,12 +153,23 @@ class MockBridge:
                     }
                     return self._send(202, {"request_id": rid, "state": "queued"})
 
-                # 默认成功
-                bridge._results[rid] = {
-                    "request_id": rid, "state": "done", "ok": True,
-                    "object_ids": [f"obj-{uuid.uuid4().hex[:8]}"],
-                    "preview_info": None, "error": None,
-                }
+                # 默认成功。必须与真实桥接一致：
+                # bake=false（且不是 delete/query）是预览，**不写文档**，object_ids 为空。
+                bake = bool(body.get("bake", True))
+                dry_run = (not bake) and op not in ("delete", "query")
+                if dry_run:
+                    bridge._results[rid] = {
+                        "request_id": rid, "state": "done", "ok": True,
+                        "object_ids": [],
+                        "preview_info": {"type": "Preview", "dry_run": True},
+                        "error": None,
+                    }
+                else:
+                    bridge._results[rid] = {
+                        "request_id": rid, "state": "done", "ok": True,
+                        "object_ids": [f"obj-{uuid.uuid4().hex[:8]}"],
+                        "preview_info": None, "error": None,
+                    }
                 return self._send(202, {"request_id": rid, "state": "queued"})
 
         return Handler

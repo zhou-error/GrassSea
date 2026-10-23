@@ -141,15 +141,22 @@ class RhinoBridgeTool(BaseTool):
         raw = (token_file or "").strip()
         if not raw:
             return ""
-        if re.fullmatch(r"[0-9a-fA-F]{32}", raw):
-            return raw
+
+        # 1) 优先按文件路径读取（正常配置）
         try:
             from pathlib import Path
 
             path = Path(raw)
-            return path.read_text(encoding="utf-8").strip() if path.exists() else ""
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip()
         except OSError:
-            return ""
+            pass
+
+        # 2) 退化为「把令牌本身填在这一栏」——实测用户就是这么填的。
+        #    只接受不含路径分隔符的串，避免把写错的路径当成令牌。
+        if re.fullmatch(r"[0-9a-fA-F]{32}", raw) or ("\\" not in raw and "/" not in raw):
+            return raw
+        return ""
 
     # ---------- 单位缓存 ----------
 

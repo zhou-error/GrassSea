@@ -31,6 +31,7 @@
 | 未实现（不下发） | **8** |
 | 可编辑配置项 | **30**（8 分类） |
 | Rhino 操作数 | **12** |
+| 契约测试 | **31**（`tests/contract/`，全量 116 通过） |
 
 **Agent 列表**：`pm_agent, review_agent, naval_arch_agent, cad_agent, rhino_agent, research_agent, doc_agent`
 
@@ -140,7 +141,7 @@ rhino_ops   12
 | # | 项 | 出处 |
 |---|---|---|
 | 1 | Rhino 5 个操作的真机验证（loft_sections / join / split / offset_srf / mass_properties 体积） | 本文 `5 |
-| 2 | `uv sync --extra dev` 让 pytest / ruff 可跑（当前 venv 未安装，CI 无效） | 审计 S2-2 |
+| ~~2~~ | ~~让 pytest 可跑~~ ✅ 已完成（2026-10-23，pytest 9.1.1 + pytest-asyncio 1.4.0，116 用例通过） | 审计 S2-2 已关闭 |
 | 3 | 计算工具数值守卫（拒 nan/inf/负值/1e12） | 审计 S2-1 |
 | 4 | 提交前端锁文件 | 审计 S2-3 |
 | 5 | 路径前缀 `/etc/passwd` 静默重写、select 枚举未校验、默认值未标记 | 审计 S3-1/2/3 |
@@ -151,6 +152,21 @@ rhino_ops   12
 **已明确暂缓**：OCR、教学文件逐章修正、pywebview 嵌入窗口（见 `docs/BACKLOG.md`）。
 
 ---
+
+## 6.5 端口层与契约测试（2026-10-23 新增）
+
+`shared/ports/` 把边界显式化：`LLMPort` / `CADBridgePort` / `ConversationStorePort`。
+**价值不在解耦，而在于把 17 个真机 bug 变成可断言的契约**：
+
+| 契约文件 | 固化的历史 bug |
+|---|---|
+| `test_cad_bridge_contract.py` | 预览仍写入、破坏性操作未确认、退化断面、mirror 平面语义、白名单 |
+| `test_history_contract.py` | 重启丢历史、会话串号、超限清空 |
+| `test_text_extract_contract.py` | latin-1 静默乱码、.doc/.dwg 无提示 |
+| `test_prompt_contract.py` | 提示词未告知能力、未实现工具被下发 |
+| `test_template_contract.py` | 浅合并丢页边距 |
+
+运行：`uv run pytest tests/contract -q`
 
 ## 7. 恢复流程（新会话从这一步开始）
 
